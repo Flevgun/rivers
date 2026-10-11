@@ -104,7 +104,7 @@ export function defaultGeos(): GeoSource[] {
       id: "geosite-ru",
       name: "geosite RU",
       tag: "geosite-ru",
-      url: "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-ru.srs",
+      url: "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ru.srs",
       everyHours: 24,
       updatedAt: null,
     },
@@ -119,8 +119,16 @@ export function defaultGeos(): GeoSource[] {
     {
       id: "ads",
       name: "Реклама",
-      tag: "geosite-ads",
+      tag: "geosite-category-ads-all",
       url: "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
+      everyHours: 24,
+      updatedAt: null,
+    },
+    {
+      id: "geosite-steam",
+      name: "Steam",
+      tag: "geosite-steam",
+      url: "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-steam.srs",
       everyHours: 24,
       updatedAt: null,
     },
@@ -259,12 +267,20 @@ export function parseMany(text: string): Server[] {
   }
 }
 
-function domainRule(domains: string[]) {
+function ruleSetTag(item: string) {
+  const name = item.slice(item.indexOf(":") + 1);
+  if (item.startsWith("geosite:")) return `geosite-${name}`;
+  if (item.startsWith("geoip:")) return `geoip-${name}`;
+  return name;
+}
+
+function domainRule(domains: string[], known: Set<string>) {
   const set = domains.filter((item) => item.startsWith("geosite:") || item.startsWith("rule-set:"));
   const plain = domains.filter((item) => !item.startsWith("geosite:") && !item.startsWith("rule-set:"));
   const rules = [];
   if (plain.length) rules.push({ domain: plain });
-  if (set.length) rules.push({ rule_set: set.map((item) => item.split(":")[1] || item) });
+  const tags = set.map(ruleSetTag).filter((tag) => known.has(tag));
+  if (tags.length) rules.push({ rule_set: tags });
   return rules;
 }
 
@@ -307,6 +323,8 @@ export function buildSingbox(input: {
     outbound: "direct",
   });
 
+  const known = new Set(geos.filter((source) => source.url.endsWith(".srs")).map((source) => source.tag));
+
   for (const item of rules.filter((entry) => entry.enabled)) {
     const domains = splitList(item.domains);
     const ips = splitList(item.ips);
@@ -318,11 +336,15 @@ export function buildSingbox(input: {
       routeRules.push({ ...base, process_name: processes });
     }
     if (ips.length) {
-      routeRules.push({ ...base, ip_cidr: ips.filter((ip) => !ip.startsWith("geoip:")) });
-      const sets = ips.filter((ip) => ip.startsWith("geoip:")).map((ip) => ip.slice(6));
-      if (sets.length) routeRules.push({ ...base, rule_set: sets.map((name) => `geoip-${name}`) });
+      const plainIps = ips.filter((ip) => !ip.startsWith("geoip:"));
+      if (plainIps.length) routeRules.push({ ...base, ip_cidr: plainIps });
+      const sets = ips
+        .filter((ip) => ip.startsWith("geoip:"))
+        .map((ip) => `geoip-${ip.slice(6)}`)
+        .filter((tag) => known.has(tag));
+      if (sets.length) routeRules.push({ ...base, rule_set: sets });
     }
-    for (const piece of domainRule(domains)) {
+    for (const piece of domainRule(domains, known)) {
       routeRules.push({ ...base, ...piece });
     }
     if (!domains.length && !ips.length && !processes.length && (item.ports || item.network)) {
@@ -377,6 +399,7 @@ export function buildSingbox(input: {
       rules: routeRules,
       final: "proxy",
       auto_detect_interface: true,
+      default_domain_resolver: "local",
     },
   };
 }

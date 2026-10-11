@@ -16,6 +16,27 @@ import {
   type TunSettings,
 } from "./model";
 
+const brokenRu = "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-ru.srs";
+const fixedRu = "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ru.srs";
+
+function repairGeos(saved: GeoSource[] | undefined, fallback: GeoSource[]) {
+  const list = saved?.length ? saved : fallback;
+  const next = list.map((source) => {
+    if (source.url === brokenRu || source.url.endsWith("/geosite-ru.srs")) {
+      return { ...source, tag: "geosite-ru", url: fixedRu };
+    }
+    if (source.id === "ads" || source.tag === "geosite-ads") {
+      return { ...source, tag: "geosite-category-ads-all" };
+    }
+    return source;
+  });
+  if (!next.some((source) => source.tag === "geosite-steam")) {
+    const steam = fallback.find((source) => source.tag === "geosite-steam");
+    if (steam) next.push(steam);
+  }
+  return next;
+}
+
 type State = {
   servers: Server[];
   subscriptions: Subscription[];
@@ -211,6 +232,7 @@ export const useVpn = create<State>()(
           overrides: { ...current.overrides, ...saved.overrides },
           tun: { ...current.tun, ...saved.tun },
           dns: { ...current.dns, ...saved.dns },
+          geos: repairGeos(saved.geos, current.geos),
         };
       },
     },
