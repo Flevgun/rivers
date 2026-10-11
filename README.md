@@ -2,13 +2,17 @@
 
 Личный клиент для VLESS. Подписки, маршруты, геофайлы, ядра Xray и sing-box, логи. Имя от семьи Rivers.
 
-Портативная сборка для Windows распаковывается и запускается, без установщика.
+Десктопная сборка для Windows. Установщик не нужен: распаковал архив и запустил `Rivers.exe`, откроется своё окно, не браузер.
 
 ## Скачать
 
-**[Rivers для Windows 64-bit](https://github.com/Flevgun/rivers/releases/download/v1.0.0/Rivers-windows-64.zip)**
+**[Rivers для Windows 64-bit](https://github.com/Flevgun/rivers/releases/download/v1.1.0/Rivers-windows-64.zip)**
 
-Распакуй архив и запусти `Rivers.cmd`. Откроется страница на `http://127.0.0.1:8787`. Чтобы выключить, закрой чёрное окно.
+1. Распакуй архив в любую папку.
+2. Запусти `Rivers.exe`.
+3. Чтобы выключить, закрой окно.
+
+Windows может написать, что издатель неизвестный. Это из-за того, что сборка без подписи. Нажми «Подробнее», затем «Выполнить в любом случае».
 
 Клиент собирает конфиг и проверяет сервер. Системный туннель поднимает ядро на компьютере: Xray слушает SOCKS `127.0.0.1:10808`, sing-box поднимает TUN.
 
@@ -26,15 +30,11 @@
 
 ```bash
 npm install
-npm run dev
-```
-
-Портативный сервер, тот же, что в архиве:
-
-```bash
 NITRO_PRESET=node npm run build
-HOST=127.0.0.1 PORT=8787 node .output/server/index.mjs
+cd desktop && npm install && npm run pack
 ```
+
+Архив появится в `desktop/dist/Rivers-windows-64.zip`.
 
 ## Контакты
 

@@ -1,0 +1,54 @@
+{
+  "name": "rivers",
+  "version": "1.1.0",
+  "private": true,
+  "main": "main.cjs",
+  "description": "Rivers desktop client",
+  "author": "Flevgun",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win zip --x64"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "app.rivers.desktop",
+    "productName": "Rivers",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "../.output/server",
+        "to": "server"
+      },
+      {
+        "from": "../.output/public",
+        "to": "public"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.ico",
+      "signAndEditExecutable": false,
+      "artifactName": "Rivers-windows-64.${ext}"
+    },
+    "linux": {
+      "target": "dir",
+      "icon": "icon.png"
+    }
+  }
+}

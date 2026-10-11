@@ -13,6 +13,8 @@ marzban-backup.tgz
 nekoray-config.zip
 nekoray-configured.zip
 portable-dist
+desktop/node_modules
+desktop/dist
 *.tsbuildinfo
 .tanstack
 .nitro
