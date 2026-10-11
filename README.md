@@ -6,9 +6,9 @@
 
 ## Скачать
 
-Один релиз, два файла: [Rivers 1.5.0](https://github.com/Flevgun/rivers/releases/tag/v1.5.0).
+Один релиз, два файла: [Rivers 1.5.1](https://github.com/Flevgun/rivers/releases/tag/v1.5.1).
 
-**[Windows 64-bit](https://github.com/Flevgun/rivers/releases/download/v1.5.0/Rivers-windows-64.zip)**
+**[Windows 64-bit](https://github.com/Flevgun/rivers/releases/download/v1.5.1/Rivers-windows-64.zip)**
 
 1. Распакуй архив в любую папку.
 2. Запусти `Rivers.exe`.
@@ -19,9 +19,9 @@
 
 Windows может написать, что издатель неизвестный. Это из-за того, что сборка без подписи. Нажми «Подробнее», затем «Выполнить в любом случае».
 
-**[Android](https://github.com/Flevgun/rivers/releases/download/v1.5.0/Rivers-android.apk)**
+**[Android](https://github.com/Flevgun/rivers/releases/download/v1.5.1/Rivers-android.apk)**
 
-Нужен Android 10 или новее. Скачай apk из того же релиза, разреши установку из этого источника и открой файл. Главный экран как на компьютере: круглая кнопка питания, скруглённые «Ссылка» и «Подписка». Тема внизу главного экрана, те же четыре. Рунет напрямую, остальное через VPN. Вкладки: главная, приложения, логи.
+Нужен Android 10 или новее. Скачай apk из того же релиза, разреши установку из этого источника и открой файл. Главный экран — круглая кнопка питания и выбранный сервер. Подписки и ссылки на вкладке «Серверы»: каждая подписка своим блоком, внутри её серверы. Тема в «Настройках»: Мята, Ночь, Бумага, Янтарь. Рунет напрямую, остальное через VPN.
 
 ## Что внутри
 

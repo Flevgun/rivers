@@ -105,13 +105,18 @@
                         android:textSize="18sp"
                         android:textStyle="bold" />
 
-                    <Spinner
-                        android:id="@+id/servers"
+                    <TextView
+                        android:id="@+id/serverName"
                         android:layout_width="match_parent"
                         android:layout_height="48dp"
                         android:layout_marginTop="12dp"
-                        android:paddingStart="18dp"
-                        android:paddingEnd="18dp" />
+                        android:clickable="true"
+                        android:ellipsize="end"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:maxLines="1"
+                        android:text="Нет сервера"
+                        android:textSize="15sp" />
 
                     <TextView
                         android:id="@+id/homeHint"
@@ -122,35 +127,101 @@
                         android:text="Рунет напрямую, остальное через VPN"
                         android:textSize="12sp" />
                 </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
+
+        <LinearLayout
+            android:id="@+id/pageServers"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingTop="18dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/titleServers"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Серверы"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/serversHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="Каждая подписка — свой блок. Внутри её серверы."
+                android:textColor="#8B978F"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/addSub"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="Подписка" />
+
+                <Button
+                    android:id="@+id/addLink"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="Ссылка" />
+            </LinearLayout>
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="12dp"
+                android:layout_weight="1">
 
                 <LinearLayout
+                    android:id="@+id/serverBlocks"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal">
+                    android:orientation="vertical" />
+            </ScrollView>
+        </LinearLayout>
 
-                    <Button
-                        android:id="@+id/addLink"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_weight="1"
-                        android:text="Ссылка" />
+        <ScrollView
+            android:id="@+id/pageSettings"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:visibility="gone">
 
-                    <Button
-                        android:id="@+id/addSub"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_marginStart="8dp"
-                        android:layout_weight="1"
-                        android:text="Подписка" />
-                </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:id="@+id/titleSettings"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Настройки"
+                    android:textSize="26sp"
+                    android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/themeLabel"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
+                    android:layout_marginTop="16dp"
                     android:text="Тема"
-                    android:textSize="12sp" />
+                    android:textSize="14sp" />
 
                 <HorizontalScrollView
                     android:layout_width="match_parent"
@@ -324,10 +395,10 @@
             android:focusable="true"
             android:gravity="center"
             android:text="Главная"
-            android:textSize="13sp" />
+            android:textSize="11sp" />
 
         <TextView
-            android:id="@+id/tabApps"
+            android:id="@+id/tabServers"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_weight="1"
@@ -335,8 +406,21 @@
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
+            android:text="Серверы"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/tabApps"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1.2"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:maxLines="1"
             android:text="Приложения"
-            android:textSize="13sp" />
+            android:textSize="11sp" />
 
         <TextView
             android:id="@+id/tabLogs"
@@ -348,6 +432,19 @@
             android:focusable="true"
             android:gravity="center"
             android:text="Логи"
-            android:textSize="13sp" />
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/tabSettings"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1.15"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:maxLines="1"
+            android:text="Настройки"
+            android:textSize="11sp" />
     </LinearLayout>
 </LinearLayout>

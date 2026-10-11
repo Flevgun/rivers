@@ -52,7 +52,7 @@ import java.util.Set;
 public class MainActivity extends android.app.Activity {
     private static final int REQ_VPN = 7;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private Spinner servers;
+    private TextView serverName;
     private TextView status;
     private TextView logs;
     private TextView appsHint;
@@ -62,6 +62,9 @@ public class MainActivity extends android.app.Activity {
     private TextView themeLabel;
     private TextView titleApps;
     private TextView titleLogs;
+    private TextView titleServers;
+    private TextView titleSettings;
+    private TextView serversHint;
     private View power;
     private View powerHalo;
     private ImageView powerIcon;
@@ -69,18 +72,23 @@ public class MainActivity extends android.app.Activity {
     private View tabBar;
     private View modeTrack;
     private LinearLayout themes;
+    private LinearLayout serverBlocks;
     private Button addLink;
     private Button addSub;
     private Button copyLogs;
     private EditText appSearch;
     private TextView tabHome;
+    private TextView tabServers;
     private TextView tabApps;
     private TextView tabLogs;
+    private TextView tabSettings;
     private TextView modeDirect;
     private TextView modeVpn;
     private View pageHome;
+    private View pageServers;
     private View pageApps;
     private View pageLogs;
+    private View pageSettings;
     private AppAdapter apps;
     private boolean spinning;
     private int tab;
@@ -91,7 +99,7 @@ public class MainActivity extends android.app.Activity {
             boolean on = RiversVpnService.running;
             status.setText(on ? "Профиль включён" : RiversVpnService.status);
             paintChrome();
-            if (tab == 2) logs.setText(LogBuffer.text());
+            if (pageLogs.getVisibility() == View.VISIBLE) logs.setText(LogBuffer.text());
             handler.postDelayed(this, 700);
         }
     };
@@ -111,6 +119,11 @@ public class MainActivity extends android.app.Activity {
         themeLabel = findViewById(R.id.themeLabel);
         titleApps = findViewById(R.id.titleApps);
         titleLogs = findViewById(R.id.titleLogs);
+        titleServers = findViewById(R.id.titleServers);
+        titleSettings = findViewById(R.id.titleSettings);
+        serversHint = findViewById(R.id.serversHint);
+        serverName = findViewById(R.id.serverName);
+        serverBlocks = findViewById(R.id.serverBlocks);
         logCard = findViewById(R.id.logCard);
         tabBar = findViewById(R.id.tabBar);
         modeTrack = findViewById(R.id.modeTrack);
@@ -119,14 +132,17 @@ public class MainActivity extends android.app.Activity {
         addSub = findViewById(R.id.addSub);
         copyLogs = findViewById(R.id.copyLogs);
         appSearch = findViewById(R.id.appSearch);
-        servers = findViewById(R.id.servers);
         appsHint = findViewById(R.id.appsHint);
         pageHome = findViewById(R.id.pageHome);
+        pageServers = findViewById(R.id.pageServers);
         pageApps = findViewById(R.id.pageApps);
         pageLogs = findViewById(R.id.pageLogs);
+        pageSettings = findViewById(R.id.pageSettings);
         tabHome = findViewById(R.id.tabHome);
+        tabServers = findViewById(R.id.tabServers);
         tabApps = findViewById(R.id.tabApps);
         tabLogs = findViewById(R.id.tabLogs);
+        tabSettings = findViewById(R.id.tabSettings);
         modeDirect = findViewById(R.id.modeDirect);
         modeVpn = findViewById(R.id.modeVpn);
         apps = new AppAdapter();
@@ -149,8 +165,11 @@ public class MainActivity extends android.app.Activity {
             public void afterTextChanged(Editable s) {}
         });
         tabHome.setOnClickListener(view -> showTab(0));
-        tabApps.setOnClickListener(view -> showTab(1));
-        tabLogs.setOnClickListener(view -> showTab(2));
+        tabServers.setOnClickListener(view -> showTab(1));
+        tabApps.setOnClickListener(view -> showTab(2));
+        tabLogs.setOnClickListener(view -> showTab(3));
+        tabSettings.setOnClickListener(view -> showTab(4));
+        serverName.setOnClickListener(view -> showTab(1));
         modeDirect.setOnClickListener(view -> setMode("direct"));
         modeVpn.setOnClickListener(view -> setMode("vpn"));
         paintMode();
@@ -193,12 +212,16 @@ public class MainActivity extends android.app.Activity {
     private void showTab(int next) {
         tab = next;
         pageHome.setVisibility(next == 0 ? View.VISIBLE : View.GONE);
-        pageApps.setVisibility(next == 1 ? View.VISIBLE : View.GONE);
-        pageLogs.setVisibility(next == 2 ? View.VISIBLE : View.GONE);
+        pageServers.setVisibility(next == 1 ? View.VISIBLE : View.GONE);
+        pageApps.setVisibility(next == 2 ? View.VISIBLE : View.GONE);
+        pageLogs.setVisibility(next == 3 ? View.VISIBLE : View.GONE);
+        pageSettings.setVisibility(next == 4 ? View.VISIBLE : View.GONE);
         paintTab(tabHome, next == 0);
-        paintTab(tabApps, next == 1);
-        paintTab(tabLogs, next == 2);
-        if (next == 2) logs.setText(LogBuffer.text());
+        paintTab(tabServers, next == 1);
+        paintTab(tabApps, next == 2);
+        paintTab(tabLogs, next == 3);
+        paintTab(tabSettings, next == 4);
+        if (next == 3) logs.setText(LogBuffer.text());
     }
 
     private void setMode(String mode) {
@@ -242,13 +265,16 @@ public class MainActivity extends android.app.Activity {
         brandTitle.setTextColor(palette.fg);
         brandSub.setTextColor(palette.muted);
         homeHint.setTextColor(palette.muted);
-        themeLabel.setTextColor(palette.muted);
+        themeLabel.setTextColor(palette.fg);
         titleApps.setTextColor(palette.fg);
         titleLogs.setTextColor(palette.fg);
+        titleServers.setTextColor(palette.fg);
+        titleSettings.setTextColor(palette.fg);
+        serversHint.setTextColor(palette.muted);
         appsHint.setTextColor(palette.muted);
         logs.setTextColor(palette.fg);
         pill(addLink, palette.raised, palette.fg);
-        pill(addSub, palette.raised, palette.fg);
+        pill(addSub, palette.accent, palette.ink);
         pill(copyLogs, palette.raised, palette.fg);
         modeTrack.setBackground(Palette.round(this, palette.surface, palette.line, 16));
         appSearch.setBackground(Palette.round(this, palette.bg, palette.line, 16));
@@ -256,12 +282,13 @@ public class MainActivity extends android.app.Activity {
         appSearch.setHintTextColor(palette.muted);
         logCard.setBackground(Palette.round(this, palette.surface, palette.line, 20));
         tabBar.setBackgroundColor(palette.bg);
-        servers.setBackground(Palette.round(this, palette.raised, 0, 24));
-        servers.setPopupBackgroundDrawable(new ColorDrawable(palette.surface));
+        serverName.setTextColor(palette.fg);
+        serverName.setBackground(Palette.round(this, palette.raised, 0, 24));
         paintChrome();
         paintMode();
         showTab(tab);
         paintThemeChips();
+        renderServers();
         if (apps != null) apps.notifyDataSetChanged();
     }
 
@@ -353,9 +380,10 @@ public class MainActivity extends android.app.Activity {
     }
 
     private void startTunnel() {
-        int index = servers.getSelectedItemPosition();
-        List<Server> list = Store.servers(this);
-        if (index >= 0 && index < list.size()) Store.save(this, list, index);
+        if (Store.selected(this) == null) {
+            toast("Сначала добавь сервер");
+            return;
+        }
         Intent intent = new Intent(this, RiversVpnService.class).setAction(RiversVpnService.ACTION_START);
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent);
         else startService(intent);
@@ -386,10 +414,8 @@ public class MainActivity extends android.app.Activity {
             toast("В тексте нет vless://");
             return;
         }
-        List<Server> all = new ArrayList<>(parsed);
-        all.addAll(Store.servers(this));
-        Store.save(this, all, 0);
-        reloadServers();
+        Store.addManual(this, parsed);
+        renderServers();
         toast("Серверов: " + parsed.size());
     }
 
@@ -413,8 +439,9 @@ public class MainActivity extends android.app.Activity {
                         toast("В подписке нет vless");
                         return;
                     }
-                    Store.save(this, parsed, 0);
-                    reloadServers();
+                    Store.putSubscription(this, url, parsed);
+                    renderServers();
+                    showTab(1);
                     toast("Серверов: " + parsed.size());
                 });
             } catch (Exception error) {
@@ -426,26 +453,156 @@ public class MainActivity extends android.app.Activity {
         }).start();
     }
 
-    private void reloadServers() {
-        List<Server> list = Store.servers(this);
-        List<String> labels = new ArrayList<>();
-        for (Server server : list) labels.add(server.label());
-        if (labels.isEmpty()) labels.add("Нет сервера");
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, R.layout.spinner_item, labels) {
-            @Override
-            public View getView(int position, View convertView, ViewGroup parent) {
-                return tintSpinner(super.getView(position, convertView, parent), false);
-            }
+    private void renderServers() {
+        Palette palette = Palette.current(this);
+        Server selected = Store.selected(this);
+        serverName.setText(selected == null ? "Нет сервера" : selected.label());
+        serverBlocks.removeAllViews();
+        List<Server> all = Store.servers(this);
+        List<Store.Sub> subs = Store.subscriptions(this);
+        if (subs.isEmpty() && all.isEmpty()) {
+            serverBlocks.addView(note("Пока пусто. Добавь подписку или ссылку.", palette));
+            return;
+        }
+        for (Store.Sub sub : subs) {
+            List<Server> inside = new ArrayList<>();
+            for (Server server : all) if (sub.id.equals(server.subId)) inside.add(server);
+            serverBlocks.addView(subscriptionBlock(sub, inside, selected, palette));
+        }
+        List<Server> manual = new ArrayList<>();
+        for (Server server : all) if (server.subId == null || server.subId.isEmpty()) manual.add(server);
+        if (!manual.isEmpty()) serverBlocks.addView(manualBlock(manual, selected, palette));
+    }
 
-            @Override
-            public View getDropDownView(int position, View convertView, ViewGroup parent) {
-                return tintSpinner(super.getDropDownView(position, convertView, parent), true);
-            }
-        };
-        servers.setAdapter(adapter);
-        int active = Store.active(this);
-        if (!list.isEmpty() && active >= 0 && active < list.size()) servers.setSelection(active);
-        servers.setEnabled(!list.isEmpty());
+    private View subscriptionBlock(Store.Sub sub, List<Server> inside, Server selected, Palette palette) {
+        LinearLayout card = card(palette);
+        LinearLayout header = row();
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        titles.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        titles.addView(caption("подписка", palette.accent));
+        titles.addView(caption(sub.name, palette.fg));
+        titles.addView(caption(countLabel(inside.size()), palette.muted));
+        header.addView(titles);
+        TextView refresh = action("Обновить", palette.muted);
+        refresh.setOnClickListener(view -> loadSubscription(sub.url));
+        header.addView(refresh);
+        TextView remove = action("Удалить", palette.danger);
+        remove.setOnClickListener(view -> {
+            Store.removeSubscription(this, sub.id);
+            renderServers();
+            toast(RiversVpnService.running ? "Переподключи, чтобы применить" : "Подписка удалена");
+        });
+        header.addView(remove);
+        card.addView(header);
+        if (inside.isEmpty()) card.addView(note("В этой подписке серверов нет.", palette));
+        else for (Server server : inside) card.addView(serverRow(server, selected, palette, false));
+        return card;
+    }
+
+    private static String countLabel(int count) {
+        int mod10 = count % 10;
+        int mod100 = count % 100;
+        if (mod10 == 1 && mod100 != 11) return count + " сервер";
+        if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return count + " сервера";
+        return count + " серверов";
+    }
+
+    private View manualBlock(List<Server> manual, Server selected, Palette palette) {
+        LinearLayout card = card(palette);
+        card.addView(caption("вручную", palette.muted));
+        TextView title = caption("Отдельные ссылки", palette.fg);
+        title.setPadding(pad(), 0, pad(), pad() / 2);
+        card.addView(title);
+        for (Server server : manual) card.addView(serverRow(server, selected, palette, true));
+        return card;
+    }
+
+    private View serverRow(Server server, Server selected, Palette palette, boolean manual) {
+        boolean on = selected != null && server.id.equals(selected.id);
+        LinearLayout row = row();
+        row.setBackgroundColor(on ? palette.bg : 0x00000000);
+        View dot = new View(this);
+        int size = (int) Palette.dp(this, 8);
+        LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(size, size);
+        dotParams.setMarginEnd(pad());
+        dot.setLayoutParams(dotParams);
+        dot.setBackground(Palette.circle(on ? palette.accent : palette.line, 0, 0));
+        row.addView(dot);
+        LinearLayout text = new LinearLayout(this);
+        text.setOrientation(LinearLayout.VERTICAL);
+        text.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        text.addView(caption(server.label(), palette.fg));
+        text.addView(caption(server.address + ":" + server.port, palette.muted));
+        row.addView(text);
+        row.setOnClickListener(view -> {
+            Store.select(this, server.id);
+            renderServers();
+            toast(RiversVpnService.running ? "Переподключи, чтобы применить" : "Выбран " + server.label());
+        });
+        if (manual) {
+            TextView remove = action("Удалить", palette.muted);
+            remove.setOnClickListener(view -> {
+                Store.removeServer(this, server.id);
+                renderServers();
+            });
+            row.addView(remove);
+        }
+        return row;
+    }
+
+    private LinearLayout card(Palette palette) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(Palette.round(this, palette.surface, palette.line, 20));
+        card.setPadding(0, pad(), 0, pad() / 2);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.bottomMargin = pad();
+        card.setLayoutParams(params);
+        return card;
+    }
+
+    private LinearLayout row() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(pad(), pad() / 2, pad() / 2, pad() / 2);
+        row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return row;
+    }
+
+    private TextView caption(String text, int color) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(color);
+        view.setTextSize(13);
+        view.setPadding(pad(), 0, pad(), 0);
+        return view;
+    }
+
+    private TextView note(String text, Palette palette) {
+        TextView view = caption(text, palette.muted);
+        view.setPadding(pad(), pad() / 2, pad(), pad() / 2);
+        return view;
+    }
+
+    private TextView action(String text, int color) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(color);
+        view.setTextSize(13);
+        view.setGravity(Gravity.CENTER);
+        int side = (int) Palette.dp(this, 10);
+        view.setPadding(side, side, side, side);
+        return view;
+    }
+
+    private int pad() {
+        return (int) Palette.dp(this, 14);
+    }
+
+    private void reloadServers() {
+        renderServers();
     }
 
     private View tintSpinner(View view, boolean drop) {

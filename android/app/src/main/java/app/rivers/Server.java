@@ -4,6 +4,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public class Server {
+    public String id = "";
     public String name = "";
     public String address = "";
     public int port;
@@ -13,9 +14,11 @@ public class Server {
     public String fp = "firefox";
     public String pbk = "";
     public String sid = "";
+    public String subId = "";
 
     public JSONObject toJson() throws JSONException {
         JSONObject item = new JSONObject();
+        item.put("id", id);
         item.put("name", name);
         item.put("address", address);
         item.put("port", port);
@@ -25,6 +28,7 @@ public class Server {
         item.put("fp", fp);
         item.put("pbk", pbk);
         item.put("sid", sid);
+        item.put("subId", subId);
         return item;
     }
 
@@ -39,6 +43,9 @@ public class Server {
         server.fp = item.optString("fp", "firefox");
         server.pbk = item.optString("pbk");
         server.sid = item.optString("sid");
+        server.subId = item.optString("subId");
+        server.id = item.optString("id");
+        if (server.id.isEmpty()) server.id = server.subId + "|" + server.uuid + "@" + server.address + ":" + server.port;
         return server;
     }
 
