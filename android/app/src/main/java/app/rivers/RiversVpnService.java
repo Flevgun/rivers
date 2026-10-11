@@ -20,6 +20,7 @@ import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 
 import hev.htproxy.TProxyService;
 
@@ -103,9 +104,39 @@ public class RiversVpnService extends VpnService {
         builder.addAddress("172.19.0.1", 30);
         builder.addRoute("0.0.0.0", 0);
         builder.addDnsServer("172.19.0.2");
-        builder.addDisallowedApplication(getPackageName());
+        applyApps(builder);
         tun = builder.establish();
         if (tun == null) throw new IllegalStateException("Система не дала VPN");
+    }
+
+    private void applyApps(Builder builder) {
+        Set<String> selected = Store.appPackages(this);
+        boolean onlyVpn = "vpn".equals(Store.appMode(this)) && !selected.isEmpty();
+        if (onlyVpn) {
+            int added = 0;
+            for (String pkg : selected) {
+                if (getPackageName().equals(pkg)) continue;
+                try {
+                    builder.addAllowedApplication(pkg);
+                    added++;
+                } catch (PackageManager.NameNotFoundException ignored) {
+                }
+            }
+            if (added > 0) return;
+        }
+        try {
+            builder.addDisallowedApplication(getPackageName());
+        } catch (PackageManager.NameNotFoundException ignored) {
+        }
+        if (!onlyVpn && "direct".equals(Store.appMode(this))) {
+            for (String pkg : selected) {
+                if (getPackageName().equals(pkg)) continue;
+                try {
+                    builder.addDisallowedApplication(pkg);
+                } catch (PackageManager.NameNotFoundException ignored) {
+                }
+            }
+        }
     }
 
     private String waitReady(Process process) {

@@ -2,16 +2,29 @@ package app.rivers;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.graphics.drawable.Drawable;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.BaseAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -23,7 +36,11 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 public class MainActivity extends android.app.Activity {
     private static final int REQ_VPN = 7;
@@ -31,15 +48,26 @@ public class MainActivity extends android.app.Activity {
     private Spinner servers;
     private TextView status;
     private TextView logs;
+    private TextView appsHint;
     private Button power;
+    private Button tabHome;
+    private Button tabApps;
+    private Button tabLogs;
+    private Button modeDirect;
+    private Button modeVpn;
+    private View pageHome;
+    private View pageApps;
+    private View pageLogs;
+    private AppAdapter apps;
     private boolean spinning;
+    private int tab;
 
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
             status.setText(RiversVpnService.status);
-            logs.setText(LogBuffer.text());
             power.setText(RiversVpnService.running ? "Выключить" : "Включить");
+            if (tab == 2) logs.setText(LogBuffer.text());
             handler.postDelayed(this, 700);
         }
     };
@@ -52,7 +80,42 @@ public class MainActivity extends android.app.Activity {
         logs = findViewById(R.id.logs);
         power = findViewById(R.id.power);
         servers = findViewById(R.id.servers);
+        appsHint = findViewById(R.id.appsHint);
+        pageHome = findViewById(R.id.pageHome);
+        pageApps = findViewById(R.id.pageApps);
+        pageLogs = findViewById(R.id.pageLogs);
+        tabHome = findViewById(R.id.tabHome);
+        tabApps = findViewById(R.id.tabApps);
+        tabLogs = findViewById(R.id.tabLogs);
+        modeDirect = findViewById(R.id.modeDirect);
+        modeVpn = findViewById(R.id.modeVpn);
+        apps = new AppAdapter();
+        ListView list = findViewById(R.id.appList);
+        list.setAdapter(apps);
+        list.setOnItemClickListener((parent, view, position, id) -> {
+            apps.toggle(position);
+            toast(RiversVpnService.running ? "Переподключи, чтобы применить" : "Сохранено");
+        });
+        ((EditText) findViewById(R.id.appSearch)).addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                apps.filter(s.toString());
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+        tabHome.setOnClickListener(view -> showTab(0));
+        tabApps.setOnClickListener(view -> showTab(1));
+        tabLogs.setOnClickListener(view -> showTab(2));
+        modeDirect.setOnClickListener(view -> setMode("direct"));
+        modeVpn.setOnClickListener(view -> setMode("vpn"));
+        paintMode();
         reloadServers();
+        loadApps();
         power.setOnClickListener(view -> {
             if (RiversVpnService.running) {
                 startService(new Intent(this, RiversVpnService.class).setAction(RiversVpnService.ACTION_STOP));
@@ -62,6 +125,12 @@ public class MainActivity extends android.app.Activity {
         });
         findViewById(R.id.addLink).setOnClickListener(view -> askText("Ссылка vless://", this::addText));
         findViewById(R.id.addSub).setOnClickListener(view -> askText("Ссылка подписки", this::loadSubscription));
+        findViewById(R.id.copyLogs).setOnClickListener(view -> {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            clipboard.setPrimaryClip(ClipData.newPlainText("Rivers", LogBuffer.text()));
+            toast("Логи в буфере");
+        });
+        showTab(0);
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 8);
         }
@@ -77,6 +146,56 @@ public class MainActivity extends android.app.Activity {
     protected void onPause() {
         handler.removeCallbacks(tick);
         super.onPause();
+    }
+
+    private void showTab(int next) {
+        tab = next;
+        pageHome.setVisibility(next == 0 ? View.VISIBLE : View.GONE);
+        pageApps.setVisibility(next == 1 ? View.VISIBLE : View.GONE);
+        pageLogs.setVisibility(next == 2 ? View.VISIBLE : View.GONE);
+        paintTab(tabHome, next == 0);
+        paintTab(tabApps, next == 1);
+        paintTab(tabLogs, next == 2);
+        if (next == 2) logs.setText(LogBuffer.text());
+    }
+
+    private void setMode(String mode) {
+        Store.setAppMode(this, mode);
+        paintMode();
+        toast(RiversVpnService.running ? "Переподключи, чтобы применить" : "Сохранено");
+    }
+
+    private void paintMode() {
+        boolean vpn = "vpn".equals(Store.appMode(this));
+        paintTab(modeDirect, !vpn);
+        paintTab(modeVpn, vpn);
+        appsHint.setText(vpn
+                ? "Только отмеченные идут в VPN. Остальные приложения — напрямую, мимо правил конфига. Применится после переподключения."
+                : "Отмеченные идут напрямую, мимо VPN. Остальные — по конфигу: рунет напрямую, прочее через VPN. Применится после переподключения.");
+    }
+
+    private static void paintTab(Button button, boolean on) {
+        button.setTextColor(on ? 0xFF3DFFB0 : 0xFF8B978F);
+    }
+
+    private void loadApps() {
+        new Thread(() -> {
+            PackageManager manager = getPackageManager();
+            Intent launcher = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+            List<ResolveInfo> resolved = manager.queryIntentActivities(launcher, 0);
+            Set<String> seen = new HashSet<>();
+            List<AppRow> rows = new ArrayList<>();
+            String self = getPackageName();
+            for (ResolveInfo info : resolved) {
+                String pkg = info.activityInfo.packageName;
+                if (self.equals(pkg) || !seen.add(pkg)) continue;
+                CharSequence label = info.loadLabel(manager);
+                Drawable icon = info.loadIcon(manager);
+                rows.add(new AppRow(label == null ? pkg : label.toString(), pkg, icon));
+            }
+            Collections.sort(rows, (a, b) -> a.label.compareToIgnoreCase(b.label));
+            runOnUiThread(() -> apps.setAll(rows, Store.appPackages(this)));
+        }).start();
     }
 
     private void askVpn() {
@@ -191,5 +310,88 @@ public class MainActivity extends android.app.Activity {
 
     private void toast(String text) {
         Toast.makeText(this, text, Toast.LENGTH_SHORT).show();
+    }
+
+    private void saveApps() {
+        Store.setAppPackages(this, apps.checked());
+    }
+
+    private static final class AppRow {
+        final String label;
+        final String pkg;
+        final Drawable icon;
+        boolean checked;
+
+        AppRow(String label, String pkg, Drawable icon) {
+            this.label = label;
+            this.pkg = pkg;
+            this.icon = icon;
+        }
+    }
+
+    private final class AppAdapter extends BaseAdapter {
+        private final List<AppRow> all = new ArrayList<>();
+        private final List<AppRow> shown = new ArrayList<>();
+        private String query = "";
+
+        void setAll(List<AppRow> rows, Set<String> checked) {
+            all.clear();
+            all.addAll(rows);
+            for (AppRow row : all) row.checked = checked.contains(row.pkg);
+            filter(query);
+        }
+
+        void filter(String text) {
+            query = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
+            shown.clear();
+            for (AppRow row : all) {
+                if (query.isEmpty()
+                        || row.label.toLowerCase(Locale.ROOT).contains(query)
+                        || row.pkg.toLowerCase(Locale.ROOT).contains(query)) {
+                    shown.add(row);
+                }
+            }
+            notifyDataSetChanged();
+        }
+
+        void toggle(int position) {
+            AppRow row = shown.get(position);
+            row.checked = !row.checked;
+            notifyDataSetChanged();
+            saveApps();
+        }
+
+        Set<String> checked() {
+            Set<String> set = new HashSet<>();
+            for (AppRow row : all) if (row.checked) set.add(row.pkg);
+            return set;
+        }
+
+        @Override
+        public int getCount() {
+            return shown.size();
+        }
+
+        @Override
+        public Object getItem(int position) {
+            return shown.get(position);
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return position;
+        }
+
+        @Override
+        public View getView(int position, View convert, ViewGroup parent) {
+            View view = convert;
+            if (view == null) view = LayoutInflater.from(MainActivity.this).inflate(R.layout.item_app, parent, false);
+            AppRow row = shown.get(position);
+            ((ImageView) view.findViewById(R.id.icon)).setImageDrawable(row.icon);
+            ((TextView) view.findViewById(R.id.label)).setText(row.label);
+            ((TextView) view.findViewById(R.id.pkg)).setText(row.pkg);
+            ((CheckBox) view.findViewById(R.id.check)).setChecked(row.checked);
+            return view;
+        }
     }
 }

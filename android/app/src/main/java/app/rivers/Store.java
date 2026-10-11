@@ -48,6 +48,31 @@ public final class Store {
         return list.get(index);
     }
 
+    public static String appMode(Context context) {
+        String mode = prefs(context).getString("appMode", "direct");
+        return "vpn".equals(mode) ? "vpn" : "direct";
+    }
+
+    public static void setAppMode(Context context, String mode) {
+        prefs(context).edit().putString("appMode", "vpn".equals(mode) ? "vpn" : "direct").apply();
+    }
+
+    public static java.util.Set<String> appPackages(Context context) {
+        java.util.Set<String> set = new java.util.LinkedHashSet<>();
+        try {
+            JSONArray array = new JSONArray(prefs(context).getString("appPackages", "[]"));
+            for (int i = 0; i < array.length(); i++) set.add(array.getString(i));
+        } catch (JSONException ignored) {
+        }
+        return set;
+    }
+
+    public static void setAppPackages(Context context, java.util.Collection<String> packages) {
+        JSONArray array = new JSONArray();
+        for (String pkg : packages) array.put(pkg);
+        prefs(context).edit().putString("appPackages", array.toString()).apply();
+    }
+
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREF, Context.MODE_PRIVATE);
     }
