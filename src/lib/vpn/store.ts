@@ -75,7 +75,8 @@ type State = {
   removeSubscription: (id: string) => void;
   applyPreset: (preset: PresetId) => void;
   updateRule: (id: string, patch: Partial<RouteRule>) => void;
-  addRule: () => void;
+  addRule: (patch?: Partial<RouteRule>) => void;
+  removeRule: (id: string) => void;
   updateGeo: (id: string, patch: Partial<GeoSource>) => void;
   addGeo: () => void;
   markGeo: (id: string) => void;
@@ -172,7 +173,7 @@ export const useVpn = create<State>()(
           preset: "custom",
           rules: state.rules.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule)),
         })),
-      addRule: () =>
+      addRule: (patch) =>
         set((state) => ({
           preset: "custom",
           rules: [
@@ -187,8 +188,14 @@ export const useVpn = create<State>()(
               processes: "",
               ports: "",
               network: "",
+              ...patch,
             },
           ],
+        })),
+      removeRule: (id) =>
+        set((state) => ({
+          preset: "custom",
+          rules: state.rules.filter((rule) => rule.id !== id),
         })),
       updateGeo: (id, patch) =>
         set((state) => ({

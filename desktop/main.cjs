@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, session, Tray, Menu, nativeImage } = require("electron");
+const { app, BrowserWindow, shell, ipcMain, session, Tray, Menu, nativeImage, clipboard } = require("electron");
 const { spawn } = require("node:child_process");
 const { existsSync, mkdirSync, writeFileSync } = require("node:fs");
 const http = require("node:http");
@@ -157,6 +157,30 @@ function waitAlive(child) {
 
 ipcMain.handle("core:stop", () => stopCore());
 
+ipcMain.handle("logs:copy", async (_event, text) => {
+  const body = String(text ?? "");
+  if (Buffer.byteLength(body, "utf8") <= 32 * 1024 || process.platform !== "win32") {
+    clipboard.writeText(body);
+    return { mode: "text" };
+  }
+  const file = path.join(app.getPath("temp"), "rivers-logs.txt");
+  writeFileSync(file, body, "utf8");
+  const copied = await new Promise((resolve) => {
+    const child = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-Command", `Set-Clipboard -LiteralPath '${file.replace(/'/g, "''")}'`],
+      { windowsHide: true },
+    );
+    child.on("exit", (code) => resolve(code === 0));
+    child.on("error", () => resolve(false));
+  });
+  if (!copied) {
+    clipboard.writeText(body);
+    return { mode: "text" };
+  }
+  return { mode: "file" };
+});
+
 ipcMain.handle("tray:set", (_event, on) => {
   trayEnabled = Boolean(on);
   if (trayEnabled) ensureTray();
@@ -245,7 +269,7 @@ ipcMain.handle("core:start", async (_event, payload) => {
 });
 
 async function openWindow() {
-  const icon = path.join(__dirname, "icon.png");
+  const icon = iconFile();
   const win = new BrowserWindow({
     width: 1180,
     height: 760,
@@ -264,6 +288,7 @@ async function openWindow() {
     },
   });
   windowRef = win;
+  if (existsSync(icon)) win.setIcon(icon);
   win.setMenu(null);
   await session.defaultSession.setProxy({ mode: "direct" });
   const home = `http://127.0.0.1:${port}/`;

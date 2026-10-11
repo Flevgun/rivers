@@ -1,6 +1,6 @@
 {
   "name": "rivers",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
   "main": "main.cjs",
   "description": "Rivers desktop client",
@@ -11,7 +11,9 @@
   },
   "devDependencies": {
     "electron": "33.4.11",
-    "electron-builder": "25.1.8"
+    "electron-builder": "25.1.8",
+    "pe-library": "^1.0.1",
+    "resedit": "^2.0.3"
   },
   "build": {
     "appId": "app.rivers.desktop",
@@ -19,6 +21,7 @@
     "directories": {
       "output": "dist"
     },
+    "afterPack": "stamp-icon.cjs",
     "files": [
       "main.cjs",
       "preload.cjs",

@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld("rivers", {
   start: (payload) => ipcRenderer.invoke("core:start", payload),
   stop: () => ipcRenderer.invoke("core:stop"),
   setTray: (on) => ipcRenderer.invoke("tray:set", Boolean(on)),
+  copyText: (text) => ipcRenderer.invoke("logs:copy", String(text ?? "")),
   onLog: (callback) => {
     const listener = (_event, line) => callback(line);
     ipcRenderer.on("core:log", listener);

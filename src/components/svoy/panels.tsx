@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
 import { cn } from "@/lib/cn";
 import { useVpn } from "@/lib/vpn/store";
 
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.3.1";
 const CORE_VERSION = { xray: "Xray", "sing-box": "sing-box 1.12.12" } as const;
 
 function bytes(value: number) {
@@ -142,26 +142,18 @@ export function LogsPanel() {
   const { logs, clearLogs, settings } = useVpn();
   const en = settings?.lang === "en";
   const [notice, setNotice] = useState("");
-  const seen = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (seen.current === null) {
-      seen.current = logs.length;
-      return;
-    }
-    const previous = seen.current;
-    seen.current = logs.length;
-    if (previous <= 100 && logs.length > 100) saveLogs(logs);
-  }, [logs]);
-
-  function copyLogs() {
+  async function copyLogs() {
     const text = formatLogs(logs);
-    if (logs.length > 100) {
-      saveLogs(logs);
-      setNotice(en ? "Saved" : "Сохранено");
+    const bridge = (window as unknown as { rivers?: { copyText?: (value: string) => Promise<{ mode?: string }> } }).rivers;
+    let mode = "text";
+    if (bridge?.copyText) {
+      const result = await bridge.copyText(text);
+      mode = result?.mode || "text";
     } else {
-      void navigator.clipboard.writeText(text).then(() => setNotice(en ? "Copied" : "Скопировано"));
+      await navigator.clipboard.writeText(text);
     }
+    setNotice(mode === "file" ? (en ? "File is on the clipboard" : "В буфере файл") : en ? "Copied" : "Скопировано");
     window.setTimeout(() => setNotice(""), 1600);
   }
 
@@ -207,17 +199,6 @@ function formatLogs(logs: { at: number; level: string; text: string }[]) {
     .reverse()
     .map((entry) => `${new Date(entry.at).toLocaleString("ru-RU")} ${entry.level} ${entry.text}`)
     .join("\n");
-}
-
-function saveLogs(logs: { at: number; level: string; text: string }[]) {
-  const blob = new Blob([formatLogs(logs)], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
-  link.href = url;
-  link.download = `rivers-logs-${stamp}.txt`;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 function useDevice() {

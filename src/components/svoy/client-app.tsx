@@ -294,7 +294,7 @@ export function ClientApp() {
 function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <img src="/favicon.svg" alt="" className="size-9" />
+      <img src="/icon.png" alt="" className="size-9 rounded-xl" />
       <div>
         <div className="text-sm font-semibold tracking-wide">Rivers</div>
         <div className="text-xs text-muted">личный клиент</div>
@@ -731,13 +731,76 @@ function ruleHint(rule: RouteRule) {
 }
 
 function Routes() {
-  const { rules, updateRule, addRule } = useVpn();
+  const { rules, updateRule, addRule, removeRule } = useVpn();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [appName, setAppName] = useState("");
+  const apps = rules.filter(isAppRule);
+  const rest = rules.filter((rule) => !isAppRule(rule));
+
+  function addApp(outbound: "proxy" | "direct") {
+    const name = appName.trim();
+    if (!name) return;
+    addRule({ label: name, outbound, processes: name });
+    setAppName("");
+  }
+
   return (
     <div>
-      <Header title="Маршруты" hint="Нажми строку, чтобы поправить. Остальное уходит в прокси." />
+      <Header
+        title="Маршруты"
+        hint="Всё, что не попало в правила, идёт в прокси. Отдельное правило на порты 0-65535 не нужно."
+      />
+      <section className="mb-4 rounded-card border border-line bg-surface p-4">
+        <h2 className="text-sm font-semibold">Приложения</h2>
+        <p className="mt-1 text-xs leading-5 text-muted">
+          Имя как в диспетчере задач, можно без .exe. Правило приложения сильнее доменов: программа целиком идёт через VPN или напрямую, даже на сайты .ru. В режиме TUN нужен sing-box от имени администратора.
+        </p>
+        <div className="mt-3 flex flex-col gap-2">
+          <input
+            value={appName}
+            onChange={(event) => setAppName(event.target.value)}
+            placeholder="Discord.exe"
+            className="min-h-11 w-full rounded-2xl border border-line bg-bg px-3 text-sm outline-none"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => addApp("proxy")}
+              className="min-h-11 rounded-full bg-accent px-3 text-sm font-semibold text-accent-ink"
+            >
+              Через VPN
+            </button>
+            <button
+              type="button"
+              onClick={() => addApp("direct")}
+              className="min-h-11 rounded-full bg-raised px-3 text-sm"
+            >
+              Напрямую
+            </button>
+          </div>
+        </div>
+        {apps.length > 0 && (
+          <ul className="mt-3 overflow-hidden rounded-2xl border border-line">
+            {apps.map((rule, index) => (
+              <li key={rule.id} className={cn("flex items-center gap-2 px-3 py-2", index > 0 && "border-t border-line")}>
+                <span className="min-w-0 flex-1 truncate text-sm">{rule.processes}</span>
+                <button
+                  type="button"
+                  onClick={() => updateRule(rule.id, { outbound: rule.outbound === "proxy" ? "direct" : "proxy" })}
+                  className="min-h-11 shrink-0 rounded-full bg-raised px-3 text-xs"
+                >
+                  {rule.outbound === "proxy" ? "через VPN" : "напрямую"}
+                </button>
+                <button type="button" onClick={() => removeRule(rule.id)} className="min-h-11 shrink-0 text-xs text-muted">
+                  Удалить
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <ul className="overflow-hidden rounded-card border border-line bg-surface">
-        {rules.map((rule, index) => {
+        {rest.map((rule, index) => {
           const open = openId === rule.id;
           return (
             <li key={rule.id} className={index > 0 ? "border-t border-line" : ""}>
@@ -784,22 +847,37 @@ function Routes() {
                   <Field label="домены" value={rule.domains} onChange={(domains) => updateRule(rule.id, { domains })} />
                   <Field label="ip" value={rule.ips} onChange={(ips) => updateRule(rule.id, { ips })} />
                   <Field
-                    label="процессы"
+                    label="приложения"
                     value={rule.processes}
                     onChange={(processes) => updateRule(rule.id, { processes })}
                   />
+                  <Field
+                    label="порты"
+                    value={rule.ports}
+                    onChange={(ports) => updateRule(rule.id, { ports })}
+                  />
+                  <p className="mt-1 text-xs leading-5 text-muted">
+                    Например 443 или 27015-27030. Весь диапазон 0-65535 не пиши: остальной трафик и так идёт в прокси.
+                  </p>
+                  <button type="button" onClick={() => removeRule(rule.id)} className="mt-1 min-h-11 text-sm text-muted">
+                    Удалить правило
+                  </button>
                 </div>
               )}
             </li>
           );
         })}
       </ul>
-      <button type="button" onClick={addRule} className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm text-accent">
+      <button type="button" onClick={() => addRule()} className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm text-accent">
         <Plus size={16} />
         Правило
       </button>
     </div>
   );
+}
+
+function isAppRule(rule: RouteRule) {
+  return Boolean(rule.processes.trim()) && !rule.domains.trim() && !rule.ips.trim() && !rule.ports.trim() && !rule.network;
 }
 
 function Geo() {

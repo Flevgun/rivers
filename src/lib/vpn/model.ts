@@ -267,17 +267,69 @@ export function parseMany(text: string): Server[] {
   }
 }
 
-function ruleSetTag(item: string) {
-  const name = item.slice(item.indexOf(":") + 1);
-  if (item.startsWith("geosite:")) return `geosite-${name}`;
-  if (item.startsWith("geoip:")) return `geoip-${name}`;
-  return name;
+function isAppOnly(rule: RouteRule) {
+  return (
+    splitList(rule.processes).length > 0 &&
+    !splitList(rule.domains).length &&
+    !splitList(rule.ips).length &&
+    !splitList(rule.ports).length &&
+    !rule.network
+  );
+}
+
+function orderedRules(rules: RouteRule[]) {
+  const enabled = rules.filter((entry) => entry.enabled);
+  return [...enabled.filter(isAppOnly), ...enabled.filter((entry) => !isAppOnly(entry))];
+}
+
+function processNames(value: string) {
+  return splitList(value).map((item) => (item.includes(".") ? item : `${item}.exe`));
+}
+
+function singboxPorts(value: string) {
+  const ranges = splitList(value).flatMap((item) => {
+    const range = item.match(/^(\d{1,5})\s*[-:]\s*(\d{1,5})$/);
+    if (range) {
+      const start = Number(range[1]);
+      const end = Number(range[2]);
+      if (start > 65535 || end > 65535) return [];
+      return [`${Math.min(start, end)}:${Math.max(start, end)}`];
+    }
+    const port = Number(item);
+    if (!Number.isInteger(port) || port < 0 || port > 65535) return [];
+    return [`${port}:${port}`];
+  });
+  return ranges.length ? { port_range: ranges } : null;
+}
+
+function xrayPorts(value: string) {
+  return splitList(value)
+    .flatMap((item) => {
+      const range = item.match(/^(\d{1,5})\s*[-:]\s*(\d{1,5})$/);
+      if (range) {
+        const start = Number(range[1]);
+        const end = Number(range[2]);
+        if (start > 65535 || end > 65535) return [];
+        return [`${Math.min(start, end)}-${Math.max(start, end)}`];
+      }
+      const port = Number(item);
+      if (!Number.isInteger(port) || port < 0 || port > 65535) return [];
+      return [String(port)];
+    })
+    .join(",");
 }
 
 function suffixName(item: string) {
   const bare = item.replace(/^\./, "").toLowerCase();
   if (bare === "рф") return "xn--p1ai";
   return bare;
+}
+
+function ruleSetTag(item: string) {
+  const name = item.slice(item.indexOf(":") + 1);
+  if (item.startsWith("geosite:")) return `geosite-${name}`;
+  if (item.startsWith("geoip:")) return `geoip-${name}`;
+  return name;
 }
 
 function domainPieces(domains: string[], known: Set<string>) {
@@ -338,13 +390,16 @@ export function buildSingbox(input: {
 
   const known = new Set(geos.filter((source) => bundledRuleFile(source.url)).map((source) => source.tag));
 
-  for (const item of rules.filter((entry) => entry.enabled)) {
+  const enabled = orderedRules(rules);
+
+  for (const item of enabled) {
     const domains = splitList(item.domains);
     const ips = splitList(item.ips);
-    const processes = splitList(item.processes);
+    const processes = processNames(item.processes);
     const base: Record<string, unknown> = { outbound: item.outbound };
     if (item.network) base.network = item.network;
-    if (item.ports) base.port = splitList(item.ports).map((port) => Number(port) || port);
+    const ports = singboxPorts(item.ports);
+    if (ports) Object.assign(base, ports);
     if (processes.length) {
       routeRules.push({ ...base, process_name: processes });
     }
@@ -360,7 +415,7 @@ export function buildSingbox(input: {
     for (const piece of domainPieces(domains, known)) {
       routeRules.push({ ...base, ...piece });
     }
-    if (!domains.length && !ips.length && !processes.length && (item.ports || item.network)) {
+    if (!domains.length && !ips.length && !processes.length && (ports || item.network)) {
       routeRules.push(base);
     }
   }
@@ -410,6 +465,7 @@ export function buildSingbox(input: {
       final: "proxy",
       auto_detect_interface: true,
       default_domain_resolver: "local",
+      ...(enabled.some((entry) => processNames(entry.processes).length > 0) ? { find_process: true } : {}),
     },
   };
 }
@@ -480,17 +536,18 @@ export function buildXray(input: {
     },
   ];
 
-  for (const item of rules.filter((entry) => entry.enabled)) {
+  for (const item of orderedRules(rules)) {
     const domains = splitList(item.domains).map(xrayDomain);
     const ips = splitList(item.ips);
-    const processes = splitList(item.processes);
+    const processes = processNames(item.processes);
     const extra: Record<string, unknown> = { type: "field", outboundTag: item.outbound };
     if (item.network) extra.network = item.network;
-    if (item.ports) extra.port = splitList(item.ports).join(",");
+    const ports = xrayPorts(item.ports);
+    if (ports) extra.port = ports;
     if (domains.length) routing.push({ ...extra, domain: domains });
     if (ips.length) routing.push({ ...extra, ip: ips });
     if (processes.length) routing.push({ ...extra, process: processes });
-    if (!domains.length && !ips.length && !processes.length && (item.network || item.ports)) routing.push(extra);
+    if (!domains.length && !ips.length && !processes.length && (ports || item.network)) routing.push(extra);
   }
 
   return {
