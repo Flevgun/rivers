@@ -162,20 +162,6 @@ function rule(
   };
 }
 
-export const GAME_APPS: { id: string; label: string; processes: string }[] = [
-  {
-    id: "apex",
-    label: "Apex Legends",
-    processes:
-      "r5apex.exe, r5apex_dx12.exe, EADesktop.exe, EALauncher.exe, EABackgroundService.exe, EasyAntiCheat_EOS.exe, start_protected_game.exe",
-  },
-  {
-    id: "titanfall2",
-    label: "Titanfall 2",
-    processes: "Titanfall2.exe, EADesktop.exe, EALauncher.exe, Origin.exe, EasyAntiCheat.exe, start_protected_game.exe",
-  },
-];
-
 export function rulesFor(preset: PresetId): RouteRule[] {
   if (preset === "all-proxy") {
     return [
@@ -200,9 +186,9 @@ export function rulesFor(preset: PresetId): RouteRule[] {
       rule("Steam", "direct", {
         domains: "steampowered.com,steamserver.net,steamcommunity.com,geosite:steam",
       }),
-      rule("Apex / Titanfall", "proxy", {
-        processes:
-          "r5apex.exe, r5apex_dx12.exe, Titanfall2.exe, EADesktop.exe, EALauncher.exe, EABackgroundService.exe, Origin.exe, EasyAntiCheat.exe, EasyAntiCheat_EOS.exe, start_protected_game.exe",
+      rule("EA / Apex", "direct", {
+        domains: "ea.com,origin.com,easports.com,apexlegends.com",
+        processes: "r5apex.exe,r5apex_dx12.exe,EADesktop.exe",
       }),
       rule("Riot", "direct", {
         domains: "riotgames.com,leagueoflegends.com,pvp.net",
@@ -297,11 +283,7 @@ function orderedRules(rules: RouteRule[]) {
 }
 
 function processNames(value: string) {
-  return value
-    .split(/[,;]+/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .map((item) => (item.includes(".") ? item : `${item}.exe`));
+  return splitList(value).map((item) => (item.includes(".") ? item : `${item}.exe`));
 }
 
 function singboxPorts(value: string) {

@@ -113,7 +113,7 @@ export const useVpn = create<State>()(
       core: "xray",
       mode: "tun",
       overrides: { xray: null, "sing-box": null },
-      settings: { autostart: false, tray: true, lang: "ru", email: "", telegram: "", routeFix: 2 },
+      settings: { autostart: false, tray: true, lang: "ru", email: "", telegram: "", routeFix: 1 },
       stats: { sent: 0, recv: 0, days: emptyWeek() },
       logs: [],
       setCore: (core) => set({ core }),
@@ -234,7 +234,7 @@ export const useVpn = create<State>()(
           ...saved,
           core: saved.core ?? current.core,
           mode: saved.mode ?? current.mode,
-          settings: { ...current.settings, ...saved.settings, routeFix: 2 },
+          settings: { ...current.settings, ...saved.settings, routeFix: 1 },
           stats: saved.stats ?? current.stats,
           logs: saved.logs ?? current.logs,
           overrides: { ...current.overrides, ...saved.overrides },
@@ -245,10 +245,6 @@ export const useVpn = create<State>()(
             stack: saved.settings?.routeFix ? (saved.tun?.stack ?? "system") : "system",
           },
           dns: { ...current.dns, ...saved.dns },
-          rules:
-            (saved.settings?.routeFix ?? 0) < 2 && (saved.preset ?? current.preset) === "games"
-              ? rulesFor("games")
-              : (saved.rules ?? current.rules),
           geos: repairGeos(saved.geos, current.geos),
         };
       },
