@@ -20,6 +20,7 @@ import { cn } from "@/lib/cn";
 import {
   buildSingbox,
   buildXray,
+  GAME_APPS,
   parseMany,
   PRESET_LABEL,
   uid,
@@ -731,17 +732,23 @@ function ruleHint(rule: RouteRule) {
 }
 
 function Routes() {
-  const { rules, updateRule, addRule, removeRule } = useVpn();
+  const { rules, updateRule, addRule, removeRule, mode, core } = useVpn();
   const [openId, setOpenId] = useState<string | null>(null);
   const [appName, setAppName] = useState("");
   const apps = rules.filter(isAppRule);
   const rest = rules.filter((rule) => !isAppRule(rule));
+  const gamesViaTun = mode === "tun" && core === "sing-box";
 
   function addApp(outbound: "proxy" | "direct") {
     const name = appName.trim();
     if (!name) return;
     addRule({ label: name, outbound, processes: name });
     setAppName("");
+  }
+
+  function addGame(game: (typeof GAME_APPS)[number]) {
+    if (rules.some((rule) => rule.label === game.label)) return;
+    addRule({ label: game.label, outbound: "proxy", processes: game.processes });
   }
 
   return (
@@ -753,13 +760,30 @@ function Routes() {
       <section className="mb-4 rounded-card border border-line bg-surface p-4">
         <h2 className="text-sm font-semibold">Приложения</h2>
         <p className="mt-1 text-xs leading-5 text-muted">
-          Имя как в диспетчере задач, можно без .exe. Правило приложения сильнее доменов: программа целиком идёт через VPN или напрямую, даже на сайты .ru. В режиме TUN нужен sing-box от имени администратора.
+          Название с ярлыка не подходит: у Apex процесс r5apex.exe, у Titanfall 2 — Titanfall2.exe, плюс лаунчер EA и античит. Кнопка ниже добавляет их все и пускает через VPN раньше правил «рунет напрямую». Иначе игра стучится на заблокированный адрес.
         </p>
+        {!gamesViaTun && (
+          <p className="mt-2 text-xs leading-5 text-danger">
+            Системный прокси игра не использует. Нужны ядро sing-box, режим TUN и запуск Rivers от имени администратора.
+          </p>
+        )}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {GAME_APPS.map((game) => (
+            <button
+              key={game.id}
+              type="button"
+              onClick={() => addGame(game)}
+              className="min-h-11 rounded-full bg-raised px-3 text-sm"
+            >
+              {game.label}
+            </button>
+          ))}
+        </div>
         <div className="mt-3 flex flex-col gap-2">
           <input
             value={appName}
             onChange={(event) => setAppName(event.target.value)}
-            placeholder="Discord.exe"
+            placeholder="имя.exe из диспетчера задач"
             className="min-h-11 w-full rounded-2xl border border-line bg-bg px-3 text-sm outline-none"
           />
           <div className="grid grid-cols-2 gap-2">
@@ -783,7 +807,7 @@ function Routes() {
           <ul className="mt-3 overflow-hidden rounded-2xl border border-line">
             {apps.map((rule, index) => (
               <li key={rule.id} className={cn("flex items-center gap-2 px-3 py-2", index > 0 && "border-t border-line")}>
-                <span className="min-w-0 flex-1 truncate text-sm">{rule.processes}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{rule.label}</span>
                 <button
                   type="button"
                   onClick={() => updateRule(rule.id, { outbound: rule.outbound === "proxy" ? "direct" : "proxy" })}

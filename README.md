@@ -6,7 +6,7 @@
 
 ## Скачать
 
-**[Rivers для Windows 64-bit](https://github.com/Flevgun/rivers/releases/download/v1.3.1/Rivers-windows-64.zip)**
+**[Rivers для Windows 64-bit](https://github.com/Flevgun/rivers/releases/download/v1.3.2/Rivers-windows-64.zip)**
 
 1. Распакуй архив в любую папку.
 2. Запусти `Rivers.exe`.
