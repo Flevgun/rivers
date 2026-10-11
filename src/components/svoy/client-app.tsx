@@ -70,6 +70,11 @@ const NAV_TEXT = {
   },
 } as const;
 
+type RiversBridge = {
+  start: (payload: { core: string; mode: string; config: string }) => Promise<{ ok: boolean; error?: string; note?: string }>;
+  stop: () => Promise<void>;
+};
+
 function useClock(active: boolean, startedAt: number | null) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -90,6 +95,7 @@ export function ClientApp() {
   const [testing, setTesting] = useState(false);
   const [delay, setDelay] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
+  const [coreNote, setCoreNote] = useState("");
   const state = useVpn();
   const opened = useRef(false);
   useEffect(() => {
@@ -158,17 +164,39 @@ export function ClientApp() {
               preset={state.preset}
               onPreset={state.applyPreset}
               onToggle={() => {
-                if (!server) {
-                  setTab("servers");
-                  return;
-                }
-                const next = !state.connected;
-                state.setConnected(next);
-                state.pushLog("info", next ? "профиль включён" : "профиль выключен");
+                void (async () => {
+                  if (!server) {
+                    setTab("servers");
+                    return;
+                  }
+                  const next = !state.connected;
+                  const bridge = (window as unknown as { rivers?: RiversBridge }).rivers;
+                  if (!next) {
+                    await bridge?.stop();
+                    state.setConnected(false);
+                    setCoreNote("");
+                    state.pushLog("info", "профиль выключен");
+                    return;
+                  }
+                  if (bridge) {
+                    const result = await bridge.start({ core: state.core, mode: state.mode, config: profile });
+                    if (!result.ok) {
+                      const message = result.error || "ядро не запустилось";
+                      setCoreNote(message);
+                      state.pushLog("error", message);
+                      return;
+                    }
+                    setCoreNote(result.note || "");
+                    if (result.note) state.pushLog("info", result.note);
+                  }
+                  state.setConnected(true);
+                  state.pushLog("info", "профиль включён");
+                })();
               }}
               mode={state.mode}
               onMode={state.setMode}
               lang={lang}
+              note={coreNote}
               testing={testing}
               delay={delay}
               failed={failed}
@@ -297,6 +325,7 @@ function Home({
   failed,
   onTest,
   lang,
+  note,
 }: {
   server: VpnServer | null;
   connected: boolean;
@@ -311,6 +340,7 @@ function Home({
   failed: boolean;
   onTest: () => void;
   lang: "ru" | "en";
+  note?: string;
 }) {
   const en = lang === "en";
   const presets: Record<PresetId, string> = en
@@ -352,7 +382,10 @@ function Home({
           <Power size={52} strokeWidth={1.6} />
         </button>
         <p className="mt-6 text-lg font-semibold">{connected ? (en ? "Profile on" : "Профиль включён") : en ? "Off" : "Выключен"}</p>
-        <p className="mt-1 text-sm text-muted">{server ? server.name : en ? "Add a server first" : "Сначала добавь сервер"}</p>
+        <p className="mt-1 max-w-md text-center text-sm text-muted">{server ? server.name : en ? "Add a server first" : "Сначала добавь сервер"}</p>
+        {note ? (
+          <p className={cn("mt-2 max-w-md text-center text-sm", connected ? "text-muted" : "text-danger")}>{note}</p>
+        ) : null}
         <div className="mt-3 grid w-full max-w-xs grid-cols-2 gap-2">
           {(
             [

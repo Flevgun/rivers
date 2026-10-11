@@ -15,6 +15,7 @@ nekoray-configured.zip
 portable-dist
 desktop/node_modules
 desktop/dist
+desktop/bin
 *.tsbuildinfo
 .tanstack
 .nitro
