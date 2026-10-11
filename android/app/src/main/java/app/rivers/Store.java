@@ -1,0 +1,54 @@
+package app.rivers;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public final class Store {
+    private static final String PREF = "rivers";
+
+    private Store() {}
+
+    public static List<Server> servers(Context context) {
+        String raw = prefs(context).getString("servers", "[]");
+        List<Server> list = new ArrayList<>();
+        try {
+            JSONArray array = new JSONArray(raw);
+            for (int i = 0; i < array.length(); i++) list.add(Server.fromJson(array.getJSONObject(i)));
+        } catch (JSONException ignored) {
+        }
+        return list;
+    }
+
+    public static int active(Context context) {
+        return prefs(context).getInt("active", 0);
+    }
+
+    public static void save(Context context, List<Server> servers, int active) {
+        JSONArray array = new JSONArray();
+        for (Server server : servers) {
+            try {
+                array.put(server.toJson());
+            } catch (JSONException ignored) {
+            }
+        }
+        prefs(context).edit().putString("servers", array.toString()).putInt("active", active).apply();
+    }
+
+    public static Server selected(Context context) {
+        List<Server> list = servers(context);
+        if (list.isEmpty()) return null;
+        int index = active(context);
+        if (index < 0 || index >= list.size()) index = 0;
+        return list.get(index);
+    }
+
+    private static SharedPreferences prefs(Context context) {
+        return context.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+    }
+}

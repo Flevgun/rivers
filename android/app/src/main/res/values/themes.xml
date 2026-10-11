@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Rivers" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#07080a</item>
+        <item name="android:navigationBarColor">#07080a</item>
+        <item name="android:windowBackground">#07080a</item>
+        <item name="android:colorAccent">#3dffb0</item>
+        <item name="android:textColor">#e7efe9</item>
+    </style>
+</resources>

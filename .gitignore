@@ -16,6 +16,12 @@ portable-dist
 desktop/node_modules
 desktop/dist
 desktop/bin
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/src/main/jniLibs/
+android/.idea/
 *.tsbuildinfo
 .tanstack
 .nitro
