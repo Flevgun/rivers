@@ -77,11 +77,13 @@ public class MainActivity extends android.app.Activity {
     private Button addSub;
     private Button copyLogs;
     private EditText appSearch;
-    private TextView tabHome;
-    private TextView tabServers;
-    private TextView tabApps;
-    private TextView tabLogs;
-    private TextView tabSettings;
+    private ImageView tabHome;
+    private ImageView tabServers;
+    private ImageView tabSettings;
+    private TextView openApps;
+    private TextView openLogs;
+    private TextView backApps;
+    private TextView backLogs;
     private TextView modeDirect;
     private TextView modeVpn;
     private View pageHome;
@@ -92,6 +94,7 @@ public class MainActivity extends android.app.Activity {
     private AppAdapter apps;
     private boolean spinning;
     private int tab;
+    private final Set<String> folded = new HashSet<>();
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -140,9 +143,11 @@ public class MainActivity extends android.app.Activity {
         pageSettings = findViewById(R.id.pageSettings);
         tabHome = findViewById(R.id.tabHome);
         tabServers = findViewById(R.id.tabServers);
-        tabApps = findViewById(R.id.tabApps);
-        tabLogs = findViewById(R.id.tabLogs);
         tabSettings = findViewById(R.id.tabSettings);
+        openApps = findViewById(R.id.openApps);
+        openLogs = findViewById(R.id.openLogs);
+        backApps = findViewById(R.id.backApps);
+        backLogs = findViewById(R.id.backLogs);
         modeDirect = findViewById(R.id.modeDirect);
         modeVpn = findViewById(R.id.modeVpn);
         apps = new AppAdapter();
@@ -166,9 +171,11 @@ public class MainActivity extends android.app.Activity {
         });
         tabHome.setOnClickListener(view -> showTab(0));
         tabServers.setOnClickListener(view -> showTab(1));
-        tabApps.setOnClickListener(view -> showTab(2));
-        tabLogs.setOnClickListener(view -> showTab(3));
-        tabSettings.setOnClickListener(view -> showTab(4));
+        tabSettings.setOnClickListener(view -> showTab(2));
+        openApps.setOnClickListener(view -> showTab(3));
+        openLogs.setOnClickListener(view -> showTab(4));
+        backApps.setOnClickListener(view -> showTab(2));
+        backLogs.setOnClickListener(view -> showTab(2));
         serverName.setOnClickListener(view -> showTab(1));
         modeDirect.setOnClickListener(view -> setMode("direct"));
         modeVpn.setOnClickListener(view -> setMode("vpn"));
@@ -213,15 +220,13 @@ public class MainActivity extends android.app.Activity {
         tab = next;
         pageHome.setVisibility(next == 0 ? View.VISIBLE : View.GONE);
         pageServers.setVisibility(next == 1 ? View.VISIBLE : View.GONE);
-        pageApps.setVisibility(next == 2 ? View.VISIBLE : View.GONE);
-        pageLogs.setVisibility(next == 3 ? View.VISIBLE : View.GONE);
-        pageSettings.setVisibility(next == 4 ? View.VISIBLE : View.GONE);
+        pageSettings.setVisibility(next == 2 ? View.VISIBLE : View.GONE);
+        pageApps.setVisibility(next == 3 ? View.VISIBLE : View.GONE);
+        pageLogs.setVisibility(next == 4 ? View.VISIBLE : View.GONE);
         paintTab(tabHome, next == 0);
         paintTab(tabServers, next == 1);
-        paintTab(tabApps, next == 2);
-        paintTab(tabLogs, next == 3);
-        paintTab(tabSettings, next == 4);
-        if (next == 3) logs.setText(LogBuffer.text());
+        paintTab(tabSettings, next >= 2);
+        if (next == 4) logs.setText(LogBuffer.text());
     }
 
     private void setMode(String mode) {
@@ -272,6 +277,12 @@ public class MainActivity extends android.app.Activity {
         titleSettings.setTextColor(palette.fg);
         serversHint.setTextColor(palette.muted);
         appsHint.setTextColor(palette.muted);
+        backApps.setTextColor(palette.accent);
+        backLogs.setTextColor(palette.accent);
+        openApps.setTextColor(palette.fg);
+        openLogs.setTextColor(palette.fg);
+        openApps.setBackground(Palette.round(this, palette.surface, palette.line, 16));
+        openLogs.setBackground(Palette.round(this, palette.surface, palette.line, 16));
         logs.setTextColor(palette.fg);
         pill(addLink, palette.raised, palette.fg);
         pill(addSub, palette.accent, palette.ink);
@@ -328,10 +339,10 @@ public class MainActivity extends android.app.Activity {
         }
     }
 
-    private void paintTab(TextView view, boolean on) {
+    private void paintTab(ImageView view, boolean on) {
         Palette palette = Palette.current(this);
-        view.setTextColor(on ? palette.accent : palette.muted);
-        view.setTypeface(null, on ? Typeface.BOLD : Typeface.NORMAL);
+        view.setImageTintList(ColorStateList.valueOf(on ? palette.accent : palette.muted));
+        view.setBackground(on ? Palette.round(this, (palette.accent & 0x00FFFFFF) | 0x24000000, 0, 20) : null);
     }
 
     private void paintSegment(TextView view, boolean on) {
@@ -475,28 +486,81 @@ public class MainActivity extends android.app.Activity {
     }
 
     private View subscriptionBlock(Store.Sub sub, List<Server> inside, Server selected, Palette palette) {
-        LinearLayout card = card(palette);
-        LinearLayout header = row();
-        LinearLayout titles = new LinearLayout(this);
-        titles.setOrientation(LinearLayout.VERTICAL);
-        titles.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        titles.addView(caption("подписка", palette.accent));
-        titles.addView(caption(sub.name, palette.fg));
-        titles.addView(caption(countLabel(inside.size()), palette.muted));
-        header.addView(titles);
-        TextView refresh = action("Обновить", palette.muted);
-        refresh.setOnClickListener(view -> loadSubscription(sub.url));
-        header.addView(refresh);
-        TextView remove = action("Удалить", palette.danger);
-        remove.setOnClickListener(view -> {
+        return groupBlock(sub.id, "подписка", sub.name, inside, selected, palette, false, () -> loadSubscription(sub.url), () -> {
             Store.removeSubscription(this, sub.id);
+            folded.remove(sub.id);
             renderServers();
             toast(RiversVpnService.running ? "Переподключи, чтобы применить" : "Подписка удалена");
         });
-        header.addView(remove);
+    }
+
+    private View manualBlock(List<Server> manual, Server selected, Palette palette) {
+        return groupBlock("manual", "вручную", "Отдельные ссылки", manual, selected, palette, true, null, null);
+    }
+
+    private View groupBlock(
+            String id,
+            String kind,
+            String title,
+            List<Server> inside,
+            Server selected,
+            Palette palette,
+            boolean manual,
+            Runnable refresh,
+            Runnable remove
+    ) {
+        boolean open = !folded.contains(id);
+        LinearLayout card = card(palette);
+        card.setClipToOutline(true);
+        LinearLayout header = row();
+        header.setBackgroundColor(palette.raised);
+        header.setMinimumHeight((int) Palette.dp(this, 72));
+        TextView chevron = action(open ? "▾" : "▸", palette.accent);
+        chevron.setTextSize(18);
+        header.addView(chevron);
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        titles.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        TextView kindView = caption(kind, palette.accent);
+        kindView.setTextSize(11);
+        kindView.setPadding(pad(), 0, pad(), 0);
+        TextView name = caption(title, palette.fg);
+        name.setTextSize(16);
+        name.setTypeface(null, Typeface.BOLD);
+        titles.addView(kindView);
+        titles.addView(name);
+        titles.addView(caption(countLabel(inside.size()), palette.muted));
+        header.addView(titles);
+        if (refresh != null) {
+            TextView refreshView = action("Обновить", palette.muted);
+            refreshView.setOnClickListener(view -> refresh.run());
+            header.addView(refreshView);
+        }
+        if (remove != null) {
+            TextView removeView = action("Удалить", palette.danger);
+            removeView.setOnClickListener(view -> remove.run());
+            header.addView(removeView);
+        }
+        header.setOnClickListener(view -> {
+            if (open) folded.add(id);
+            else folded.remove(id);
+            renderServers();
+        });
         card.addView(header);
-        if (inside.isEmpty()) card.addView(note("В этой подписке серверов нет.", palette));
-        else for (Server server : inside) card.addView(serverRow(server, selected, palette, false));
+        if (!open) return card;
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setBackgroundColor(palette.bg);
+        body.setPadding(0, (int) Palette.dp(this, 4), 0, (int) Palette.dp(this, 4));
+        if (inside.isEmpty()) {
+            body.addView(note("В этой подписке серверов нет.", palette));
+        } else {
+            for (int i = 0; i < inside.size(); i++) {
+                if (i > 0) body.addView(hairline(palette));
+                body.addView(serverRow(inside.get(i), selected, palette, manual));
+            }
+        }
+        card.addView(body);
         return card;
     }
 
@@ -508,20 +572,20 @@ public class MainActivity extends android.app.Activity {
         return count + " серверов";
     }
 
-    private View manualBlock(List<Server> manual, Server selected, Palette palette) {
-        LinearLayout card = card(palette);
-        card.addView(caption("вручную", palette.muted));
-        TextView title = caption("Отдельные ссылки", palette.fg);
-        title.setPadding(pad(), 0, pad(), pad() / 2);
-        card.addView(title);
-        for (Server server : manual) card.addView(serverRow(server, selected, palette, true));
-        return card;
+    private View hairline(Palette palette) {
+        View line = new View(this);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, (int) Palette.dp(this, 1)));
+        params.setMarginStart(pad());
+        params.setMarginEnd(pad());
+        line.setLayoutParams(params);
+        line.setBackgroundColor(palette.line);
+        return line;
     }
 
     private View serverRow(Server server, Server selected, Palette palette, boolean manual) {
         boolean on = selected != null && server.id.equals(selected.id);
         LinearLayout row = row();
-        row.setBackgroundColor(on ? palette.bg : 0x00000000);
+        row.setBackgroundColor(on ? ((palette.accent & 0x00FFFFFF) | 0x24000000) : 0x00000000);
         View dot = new View(this);
         int size = (int) Palette.dp(this, 8);
         LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(size, size);
@@ -555,7 +619,7 @@ public class MainActivity extends android.app.Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setBackground(Palette.round(this, palette.surface, palette.line, 20));
-        card.setPadding(0, pad(), 0, pad() / 2);
+        card.setPadding(0, 0, 0, 0);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         params.bottomMargin = pad();
         card.setLayoutParams(params);
