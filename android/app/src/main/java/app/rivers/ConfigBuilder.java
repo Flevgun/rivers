@@ -9,80 +9,74 @@ public final class ConfigBuilder {
 
     private ConfigBuilder() {}
 
-    public static String singbox(Server server) throws JSONException {
+    public static String xray(Server server) throws JSONException {
         JSONObject root = new JSONObject();
-        root.put("log", new JSONObject().put("level", "info"));
-
-        JSONArray dnsServers = new JSONArray()
-                .put(new JSONObject().put("tag", "local").put("address", "77.88.8.8").put("detour", "direct"))
-                .put(new JSONObject().put("tag", "remote").put("address", "https://1.1.1.1/dns-query").put("detour", "proxy"));
-        JSONArray dnsRules = new JSONArray()
-                .put(new JSONObject().put("rule_set", new JSONArray().put("geosite-ru")).put("server", "local"))
-                .put(new JSONObject()
-                        .put("domain_suffix", new JSONArray().put("ru").put("su").put("xn--p1ai"))
-                        .put("server", "local"));
+        root.put("log", new JSONObject().put("loglevel", "info"));
         root.put("dns", new JSONObject()
-                .put("servers", dnsServers)
-                .put("rules", dnsRules)
-                .put("final", "remote")
-                .put("strategy", "ipv4_only")
-                .put("independent_cache", true));
-
+                .put("queryStrategy", "UseIPv4")
+                .put("servers", new JSONArray()
+                        .put(new JSONObject()
+                                .put("address", "77.88.8.8")
+                                .put("skipFallback", true)
+                                .put("domains", new JSONArray()
+                                        .put("domain:ru")
+                                        .put("domain:su")
+                                        .put("domain:xn--p1ai")
+                                        .put("geosite:category-ru")))
+                        .put("https://1.1.1.1/dns-query")));
         root.put("inbounds", new JSONArray().put(new JSONObject()
-                .put("type", "mixed")
-                .put("tag", "mixed-in")
+                .put("tag", "socks")
                 .put("listen", "127.0.0.1")
-                .put("listen_port", SOCKS_PORT)));
-
-        JSONObject tls = new JSONObject()
-                .put("enabled", true)
-                .put("server_name", server.sni)
-                .put("utls", new JSONObject().put("enabled", true).put("fingerprint", blank(server.fp) ? "firefox" : server.fp))
-                .put("reality", new JSONObject()
+                .put("port", SOCKS_PORT)
+                .put("protocol", "socks")
+                .put("settings", new JSONObject().put("udp", true))
+                .put("sniffing", new JSONObject()
                         .put("enabled", true)
-                        .put("public_key", server.pbk)
-                        .put("short_id", server.sid));
-        JSONObject proxy = new JSONObject()
-                .put("type", "vless")
-                .put("tag", "proxy")
-                .put("server", server.address)
-                .put("server_port", server.port)
-                .put("uuid", server.uuid)
-                .put("tls", tls);
-        if (!blank(server.flow)) proxy.put("flow", server.flow);
+                        .put("destOverride", new JSONArray().put("http").put("tls").put("quic")))));
 
+        JSONObject proxy = new JSONObject()
+                .put("tag", "proxy")
+                .put("protocol", "vless")
+                .put("settings", new JSONObject().put("vnext", new JSONArray().put(new JSONObject()
+                        .put("address", server.address)
+                        .put("port", server.port)
+                        .put("users", new JSONArray().put(user(server))))))
+                .put("streamSettings", new JSONObject()
+                        .put("network", "tcp")
+                        .put("security", "reality")
+                        .put("realitySettings", new JSONObject()
+                                .put("serverName", server.sni)
+                                .put("fingerprint", blank(server.fp) ? "firefox" : server.fp)
+                                .put("publicKey", server.pbk)
+                                .put("shortId", server.sid)
+                                .put("spiderX", "/")));
         root.put("outbounds", new JSONArray()
                 .put(proxy)
-                .put(new JSONObject().put("type", "direct").put("tag", "direct"))
-                .put(new JSONObject().put("type", "block").put("tag", "block")));
-
-        JSONArray sets = new JSONArray()
-                .put(localSet("geosite-ru", "geosite-category-ru.srs"))
-                .put(localSet("geoip-ru", "geoip-ru.srs"))
-                .put(localSet("geosite-category-ads-all", "geosite-category-ads-all.srs"));
-        JSONArray rules = new JSONArray()
-                .put(new JSONObject().put("action", "sniff"))
-                .put(new JSONObject().put("ip_is_private", true).put("outbound", "direct"))
-                .put(new JSONObject().put("rule_set", new JSONArray().put("geosite-category-ads-all")).put("outbound", "block"))
-                .put(new JSONObject().put("ip_cidr", new JSONArray().put("10.0.0.0/8").put("192.168.0.0/16").put("127.0.0.0/8")).put("outbound", "direct"))
-                .put(new JSONObject().put("domain_suffix", new JSONArray().put("ru").put("su").put("xn--p1ai")).put("outbound", "direct"))
-                .put(new JSONObject().put("rule_set", new JSONArray().put("geosite-ru")).put("outbound", "direct"))
-                .put(new JSONObject().put("rule_set", new JSONArray().put("geoip-ru")).put("outbound", "direct"));
-        root.put("route", new JSONObject()
-                .put("rule_set", sets)
-                .put("rules", rules)
-                .put("final", "proxy")
-                .put("auto_detect_interface", true)
-                .put("default_domain_resolver", "local"));
+                .put(new JSONObject().put("tag", "direct").put("protocol", "freedom")
+                        .put("settings", new JSONObject().put("domainStrategy", "UseIPv4")))
+                .put(new JSONObject().put("tag", "block").put("protocol", "blackhole").put("settings", new JSONObject())));
+        root.put("routing", new JSONObject()
+                .put("domainStrategy", "AsIs")
+                .put("rules", new JSONArray()
+                        .put(new JSONObject().put("type", "field").put("outboundTag", "direct")
+                                .put("ip", new JSONArray().put("10.0.0.0/8").put("192.168.0.0/16").put("127.0.0.0/8")))
+                        .put(new JSONObject().put("type", "field").put("outboundTag", "block")
+                                .put("domain", new JSONArray().put("geosite:category-ads-all")))
+                        .put(new JSONObject().put("type", "field").put("outboundTag", "direct")
+                                .put("domain", new JSONArray()
+                                        .put("geosite:category-ru")
+                                        .put("domain:ru")
+                                        .put("domain:su")
+                                        .put("domain:xn--p1ai")))
+                        .put(new JSONObject().put("type", "field").put("outboundTag", "direct")
+                                .put("ip", new JSONArray().put("geoip:ru")))));
         return root.toString(2);
     }
 
-    private static JSONObject localSet(String tag, String file) throws JSONException {
-        return new JSONObject()
-                .put("tag", tag)
-                .put("type", "local")
-                .put("format", "binary")
-                .put("path", "rules/" + file);
+    private static JSONObject user(Server server) throws JSONException {
+        JSONObject user = new JSONObject().put("id", server.uuid).put("encryption", "none");
+        if (!blank(server.flow)) user.put("flow", server.flow);
+        return user;
     }
 
     private static boolean blank(String value) {

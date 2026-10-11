@@ -16,7 +16,7 @@
 
 Windows может написать, что издатель неизвестный. Это из-за того, что сборка без подписи. Нажми «Подробнее», затем «Выполнить в любом случае».
 
-**[Rivers для Android](https://github.com/Flevgun/rivers/releases/download/v1.4.0/Rivers-android.apk)**
+**[Rivers для Android](https://github.com/Flevgun/rivers/releases/download/v1.4.1/Rivers-android.apk)**
 
 Нужен Android 10 или новее. Скачай apk, разреши установку из этого источника и открой файл. При первом включении система спросит разрешение VPN. Вставь ссылку `vless://` или подписку, выбери сервер и нажми «Включить». Рунет идёт напрямую, остальное через VPN. Это отдельное приложение, не окно Windows.
 

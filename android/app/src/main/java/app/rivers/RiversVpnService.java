@@ -63,14 +63,16 @@ public class RiversVpnService extends VpnService {
                 Server server = Store.selected(this);
                 if (server == null) throw new IOException("Сначала добавь сервер");
                 File dir = getFilesDir();
-                copyRules(new File(dir, "rules"));
+                copyAsset(dir, "geoip.dat");
+                copyAsset(dir, "geosite.dat");
                 File config = new File(dir, "config.json");
-                write(config, ConfigBuilder.singbox(server));
-                File binary = new File(getApplicationInfo().nativeLibraryDir, "libsing-box.so");
+                write(config, ConfigBuilder.xray(server));
+                File binary = new File(getApplicationInfo().nativeLibraryDir, "libxray.so");
                 if (!binary.exists()) throw new IOException("В сборке нет ядра для этого телефона");
                 stopCore();
                 ProcessBuilder builder = new ProcessBuilder(binary.getAbsolutePath(), "run", "-c", config.getAbsolutePath());
                 builder.directory(dir);
+                builder.environment().put("XRAY_LOCATION_ASSET", dir.getAbsolutePath());
                 builder.redirectErrorStream(true);
                 core = builder.start();
                 pump = new Thread(() -> drain(core), "rivers-log");
@@ -189,17 +191,12 @@ public class RiversVpnService extends VpnService {
                 .build();
     }
 
-    private void copyRules(File dir) throws IOException {
-        if (!dir.exists() && !dir.mkdirs()) throw new IOException("Нет папки правил");
-        String[] names = getAssets().list("rules");
-        if (names == null) return;
+    private void copyAsset(File dir, String name) throws IOException {
         byte[] buffer = new byte[8192];
-        for (String name : names) {
-            try (InputStream in = getAssets().open("rules/" + name);
-                 FileOutputStream out = new FileOutputStream(new File(dir, name))) {
-                int read;
-                while ((read = in.read(buffer)) >= 0) out.write(buffer, 0, read);
-            }
+        try (InputStream in = getAssets().open(name);
+             FileOutputStream out = new FileOutputStream(new File(dir, name))) {
+            int read;
+            while ((read = in.read(buffer)) >= 0) out.write(buffer, 0, read);
         }
     }
 
