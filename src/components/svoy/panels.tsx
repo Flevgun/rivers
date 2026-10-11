@@ -3,8 +3,8 @@ import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
 import { cn } from "@/lib/cn";
 import { useVpn } from "@/lib/vpn/store";
 
-const APP_VERSION = "1.0.0";
-const CORE_VERSION = { xray: "Xray 26.2.6", "sing-box": "sing-box 1.12.0" } as const;
+const APP_VERSION = "1.3.0";
+const CORE_VERSION = { xray: "Xray", "sing-box": "sing-box 1.12.12" } as const;
 
 function bytes(value: number) {
   if (value < 1024) return `${value} Б`;
@@ -52,7 +52,10 @@ export function SettingsPanel() {
         <Switch
           label={en ? "Minimize to tray" : "Сворачивать в трей"}
           on={settings.tray}
-          set={(tray) => setSetting({ tray })}
+          set={(tray) => {
+            setSetting({ tray });
+            void (window as unknown as { rivers?: { setTray?: (on: boolean) => void } }).rivers?.setTray?.(tray);
+          }}
         />
         <div className="flex min-h-12 items-center justify-between gap-3">
           <span className="text-sm">{en ? "Language" : "Язык"}</span>

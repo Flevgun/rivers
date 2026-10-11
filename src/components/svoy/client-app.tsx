@@ -73,6 +73,8 @@ const NAV_TEXT = {
 type RiversBridge = {
   start: (payload: { core: string; mode: string; config: string }) => Promise<{ ok: boolean; error?: string; note?: string }>;
   stop: () => Promise<void>;
+  setTray?: (on: boolean) => Promise<void>;
+  onLog?: (callback: (line: string) => void) => () => void;
 };
 
 function useClock(active: boolean, startedAt: number | null) {
@@ -99,10 +101,25 @@ export function ClientApp() {
   const state = useVpn();
   const opened = useRef(false);
   useEffect(() => {
-    void useVpn.persist.rehydrate();
-    if (opened.current) return;
-    opened.current = true;
-    useVpn.getState().pushLog("info", "клиент открыт");
+    let off = () => {};
+    let alive = true;
+    void (async () => {
+      await useVpn.persist.rehydrate();
+      if (!alive || opened.current) return;
+      opened.current = true;
+      const bridge = (window as unknown as { rivers?: RiversBridge }).rivers;
+      useVpn.getState().pushLog("info", "клиент открыт");
+      void bridge?.setTray?.(useVpn.getState().settings.tray);
+      off =
+        bridge?.onLog?.((line) => {
+          const level = /FATAL|ERROR|panic|ядро остановилось/i.test(line) ? "error" : "info";
+          useVpn.getState().pushLog(level, line);
+        }) ?? (() => {});
+    })();
+    return () => {
+      alive = false;
+      off();
+    };
   }, []);
   const lang = state.settings?.lang ?? "ru";
   const navText = NAV_TEXT[lang];
@@ -179,6 +196,7 @@ export function ClientApp() {
                     return;
                   }
                   if (bridge) {
+                    state.pushLog("info", `запуск ${state.core}, режим ${state.mode}`);
                     const result = await bridge.start({ core: state.core, mode: state.mode, config: profile });
                     if (!result.ok) {
                       const message = result.error || "ядро не запустилось";
@@ -406,6 +424,15 @@ function Home({
             </button>
           ))}
         </div>
+        <p className="mt-2 max-w-md text-center text-xs text-muted">
+          {mode === "tun"
+            ? en
+              ? "All traffic. Needs sing-box, run as Administrator. .ru stays direct."
+              : "Весь трафик. Нужны sing-box и запуск от администратора. .ru идёт напрямую."
+            : en
+              ? "No admin. Browsers: .ru direct, the rest through the VPN."
+              : "Без прав администратора. В браузере .ru напрямую, остальное через VPN."}
+        </p>
         <div className="mt-4 flex gap-6 text-center text-sm">
           <Stat label="сессия" value={connected ? clock : "—"} />
           <Stat label="порт" value={server ? String(server.port) : "—"} />
@@ -860,12 +887,10 @@ function Core({
         title="Ядро"
         hint={
           core === "xray"
-            ? mode === "tun"
-              ? "Режим TUN. Xray слушает SOCKS 127.0.0.1:10808, туннель вокруг него поднимает клиент на компьютере."
-              : "Системный прокси: HTTP 127.0.0.1:10809 и SOCKS 10808."
+            ? "Xray не умеет TUN. Системный прокси HTTP 127.0.0.1:10809: браузер, .ru напрямую, остальное через VPN."
             : mode === "tun"
-              ? "Режим TUN: sing-box забирает весь трафик в интерфейс."
-              : "Системный прокси 127.0.0.1:2080. Игры и программы вне прокси его не увидят."
+              ? "TUN: весь трафик. Запусти Rivers от имени администратора. .ru напрямую, остальное через VPN."
+              : "Системный прокси 127.0.0.1:2080. Браузер: .ru напрямую, остальное через VPN. Игры этот режим не видят."
         }
       />
       <div className="mb-3 grid grid-cols-2 gap-2">

@@ -79,9 +79,9 @@ export function uid() {
 export function defaultTun(): TunSettings {
   return {
     mtu: 1400,
-    stack: "mixed",
+    stack: "system",
     autoRoute: true,
-    strictRoute: true,
+    strictRoute: false,
     ipv6: false,
     sniff: true,
     address: "172.19.0.1/30",
@@ -274,12 +274,29 @@ function ruleSetTag(item: string) {
   return name;
 }
 
-function domainRule(domains: string[], known: Set<string>) {
-  const set = domains.filter((item) => item.startsWith("geosite:") || item.startsWith("rule-set:"));
-  const plain = domains.filter((item) => !item.startsWith("geosite:") && !item.startsWith("rule-set:"));
-  const rules = [];
-  if (plain.length) rules.push({ domain: plain });
-  const tags = set.map(ruleSetTag).filter((tag) => known.has(tag));
+function suffixName(item: string) {
+  const bare = item.replace(/^\./, "").toLowerCase();
+  if (bare === "рф") return "xn--p1ai";
+  return bare;
+}
+
+function domainPieces(domains: string[], known: Set<string>) {
+  const sets = domains.filter((item) => item.startsWith("geosite:") || item.startsWith("rule-set:"));
+  const keywords = domains.filter((item) => item.startsWith("keyword:")).map((item) => item.slice("keyword:".length));
+  const exact = domains.filter((item) => item.startsWith("full:")).map((item) => suffixName(item.slice("full:".length)));
+  const plain = domains.filter(
+    (item) =>
+      !item.startsWith("geosite:") &&
+      !item.startsWith("rule-set:") &&
+      !item.startsWith("keyword:") &&
+      !item.startsWith("full:"),
+  );
+  const rules: Record<string, unknown>[] = [];
+  const suffixes = plain.map(suffixName);
+  if (exact.length) rules.push({ domain: exact });
+  if (suffixes.length) rules.push({ domain_suffix: suffixes });
+  if (keywords.length) rules.push({ domain_keyword: keywords });
+  const tags = sets.map(ruleSetTag).filter((tag) => known.has(tag));
   if (tags.length) rules.push({ rule_set: tags });
   return rules;
 }
@@ -315,15 +332,11 @@ export function buildSingbox(input: {
     : { type: "direct", tag: "proxy" };
 
   const routeRules = [];
-  if (tun.sniff) {
-    routeRules.push({ action: "sniff" });
-  }
-  routeRules.push({
-    ip_cidr: ["10.0.0.0/8", "192.168.0.0/16", "127.0.0.0/8"],
-    outbound: "direct",
-  });
+  if (tun.sniff) routeRules.push({ action: "sniff" });
+  if (mode === "tun") routeRules.push({ protocol: "dns", action: "hijack-dns" });
+  routeRules.push({ ip_is_private: true, outbound: "direct" });
 
-  const known = new Set(geos.filter((source) => source.url.endsWith(".srs")).map((source) => source.tag));
+  const known = new Set(geos.filter((source) => bundledRuleFile(source.url)).map((source) => source.tag));
 
   for (const item of rules.filter((entry) => entry.enabled)) {
     const domains = splitList(item.domains);
@@ -344,7 +357,7 @@ export function buildSingbox(input: {
         .filter((tag) => known.has(tag));
       if (sets.length) routeRules.push({ ...base, rule_set: sets });
     }
-    for (const piece of domainRule(domains, known)) {
+    for (const piece of domainPieces(domains, known)) {
       routeRules.push({ ...base, ...piece });
     }
     if (!domains.length && !ips.length && !processes.length && (item.ports || item.network)) {
@@ -359,7 +372,10 @@ export function buildSingbox(input: {
         { tag: "local", address: dns.local, detour: "direct" },
         { tag: "remote", address: dns.remote, detour: "proxy" },
       ],
-      rules: [{ domain_suffix: splitList(dns.suffixes), server: "local" }],
+      rules: [
+        ...(known.has("geosite-ru") ? [{ rule_set: ["geosite-ru"], server: "local" }] : []),
+        { domain_suffix: splitList(dns.suffixes).map(suffixName), server: "local" },
+      ],
       final: "remote",
       strategy: dns.strategy,
       independent_cache: true,
@@ -371,7 +387,6 @@ export function buildSingbox(input: {
             tag: "mixed-in",
             listen: "127.0.0.1",
             listen_port: 2080,
-            set_system_proxy: true,
           }
         : {
             type: "tun",
@@ -379,23 +394,18 @@ export function buildSingbox(input: {
             address: [tun.address],
             mtu: tun.mtu,
             auto_route: tun.autoRoute,
-            strict_route: tun.strictRoute,
-            stack: tun.stack,
-            inet6_address: tun.ipv6 ? "fdfe:dcba:9876::1/126" : undefined,
+            strict_route: Boolean(tun.strictRoute),
+            stack: tun.stack || "system",
+            sniff: true,
           },
     ],
     outbounds: [proxy, { type: "direct", tag: "direct" }, { type: "block", tag: "block" }],
     route: {
-      rule_set: geos
-        .filter((source) => source.url.endsWith(".srs"))
-        .map((source) => ({
-          tag: source.tag,
-          type: "remote",
-          format: "binary",
-          url: source.url,
-          download_detour: "direct",
-          update_interval: `${source.everyHours}h`,
-        })),
+      rule_set: geos.flatMap((source) => {
+        const file = bundledRuleFile(source.url);
+        if (!file) return [];
+        return [{ tag: source.tag, type: "local", format: "binary", path: `rules/${file}` }];
+      }),
       rules: routeRules,
       final: "proxy",
       auto_detect_interface: true,
@@ -404,9 +414,22 @@ export function buildSingbox(input: {
   };
 }
 
+function bundledRuleFile(url: string) {
+  const file = url.split("/").pop() ?? "";
+  const bundled = new Set([
+    "geosite-category-ru.srs",
+    "geoip-ru.srs",
+    "geosite-category-ads-all.srs",
+    "geosite-steam.srs",
+  ]);
+  return bundled.has(file) ? file : "";
+}
+
 function xrayDomain(item: string) {
-  if (/^(geosite:|domain:|full:|keyword:|regexp:)/.test(item)) return item;
-  return `domain:${item.replace(/^\./, "")}`;
+  if (item === "geosite:ru" || item === "geosite:category-ru") return "geosite:category-ru";
+  if (/^(keyword:|regexp:|full:|geosite:|geoip:)/.test(item)) return item;
+  if (item.startsWith("domain:")) return `domain:${suffixName(item.slice("domain:".length))}`;
+  return `domain:${suffixName(item)}`;
 }
 
 export function buildXray(input: {
@@ -415,7 +438,7 @@ export function buildXray(input: {
   dns: DnsSettings;
   mode: ConnectMode;
 }) {
-  const { server, rules, dns, mode } = input;
+  const { server, rules, dns } = input;
   const proxy = server
     ? {
         tag: "proxy",
@@ -458,65 +481,53 @@ export function buildXray(input: {
   ];
 
   for (const item of rules.filter((entry) => entry.enabled)) {
-    const domains = splitList(item.domains);
+    const domains = splitList(item.domains).map(xrayDomain);
     const ips = splitList(item.ips);
     const processes = splitList(item.processes);
-    const rule: Record<string, unknown> = { type: "field", outboundTag: item.outbound };
-    if (domains.length) rule.domain = domains.map(xrayDomain);
-    if (ips.length) rule.ip = ips;
-    if (processes.length) rule.process = processes;
-    if (item.network) rule.network = item.network;
-    if (item.ports) rule.port = splitList(item.ports).join(",");
-    if (domains.length || ips.length || processes.length || item.network || item.ports) routing.push(rule);
+    const extra: Record<string, unknown> = { type: "field", outboundTag: item.outbound };
+    if (item.network) extra.network = item.network;
+    if (item.ports) extra.port = splitList(item.ports).join(",");
+    if (domains.length) routing.push({ ...extra, domain: domains });
+    if (ips.length) routing.push({ ...extra, ip: ips });
+    if (processes.length) routing.push({ ...extra, process: processes });
+    if (!domains.length && !ips.length && !processes.length && (item.network || item.ports)) routing.push(extra);
   }
 
   return {
-    log: { loglevel: "warning" },
+    log: { loglevel: "info" },
     dns: {
       queryStrategy: dns.strategy === "ipv4_only" ? "UseIPv4" : "UseIP",
       servers: [
         {
           address: dns.local,
-          domains: splitList(dns.suffixes).map((item) => `domain:${item.replace(/^\./, "")}`),
+          domains: [...splitList(dns.suffixes).map((item) => `domain:${suffixName(item)}`), "geosite:category-ru"],
           skipFallback: true,
         },
         dns.remote,
       ],
     },
-    inbounds:
-      mode === "system"
-        ? [
-            {
-              tag: "socks",
-              listen: "127.0.0.1",
-              port: 10808,
-              protocol: "socks",
-              settings: { udp: true },
-              sniffing: { enabled: true, destOverride: ["http", "tls", "quic"] },
-            },
-            {
-              tag: "http",
-              listen: "127.0.0.1",
-              port: 10809,
-              protocol: "http",
-              sniffing: { enabled: true, destOverride: ["http", "tls"] },
-            },
-          ]
-        : [
-            {
-              tag: "socks",
-              listen: "127.0.0.1",
-              port: 10808,
-              protocol: "socks",
-              settings: { udp: true },
-              sniffing: { enabled: true, destOverride: ["http", "tls", "quic"], routeOnly: true },
-            },
-          ],
+    inbounds: [
+      {
+        tag: "socks",
+        listen: "127.0.0.1",
+        port: 10808,
+        protocol: "socks",
+        settings: { udp: true },
+        sniffing: { enabled: true, destOverride: ["http", "tls", "quic"] },
+      },
+      {
+        tag: "http",
+        listen: "127.0.0.1",
+        port: 10809,
+        protocol: "http",
+        sniffing: { enabled: true, destOverride: ["http", "tls"] },
+      },
+    ],
     outbounds: [
       proxy,
       { tag: "direct", protocol: "freedom", settings: { domainStrategy: "UseIPv4" } },
       { tag: "block", protocol: "blackhole", settings: {} },
     ],
-    routing: { domainStrategy: "IPIfNonMatch", rules: routing },
+    routing: { domainStrategy: "AsIs", rules: routing },
   };
 }

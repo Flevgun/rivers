@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, session } = require("electron");
+const { app, BrowserWindow, shell, ipcMain, session, Tray, Menu, nativeImage } = require("electron");
 const { spawn } = require("node:child_process");
 const { existsSync, mkdirSync, writeFileSync } = require("node:fs");
 const http = require("node:http");
@@ -11,6 +11,9 @@ if (!gotLock) app.quit();
 let server;
 let windowRef;
 let coreProc;
+let tray;
+let trayEnabled = true;
+let quitting = false;
 let port = 47831;
 
 function resourceRoot() {
@@ -81,11 +84,11 @@ function stopServer() {
 }
 
 function setSystemProxy(enable, serverValue) {
-  if (process.platform !== "win32") return Promise.resolve();
+  if (process.platform !== "win32") return Promise.resolve({ ok: true });
   const lines = [
     "$p='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'",
     `Set-ItemProperty -Path $p -Name ProxyEnable -Type DWord -Value ${enable ? 1 : 0}`,
-    "Set-ItemProperty -Path $p -Name ProxyOverride -Value 'localhost;127.0.0.1;<local>'",
+    "Set-ItemProperty -Path $p -Name ProxyOverride -Value 'localhost;127.*;10.*;192.168.*;<local>'",
   ];
   if (enable && serverValue) {
     lines.push(`Set-ItemProperty -Path $p -Name ProxyServer -Value '${serverValue}'`);
@@ -97,8 +100,15 @@ function setSystemProxy(enable, serverValue) {
   );
   return new Promise((resolve) => {
     const child = spawn("powershell.exe", ["-NoProfile", "-Command", lines.join("; ")], { windowsHide: true });
-    child.on("exit", () => resolve());
-    child.on("error", () => resolve());
+    let text = "";
+    child.stdout?.on("data", (chunk) => {
+      text += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk) => {
+      text += chunk.toString();
+    });
+    child.on("exit", (code) => resolve({ ok: code === 0, error: text.trim() }));
+    child.on("error", (error) => resolve({ ok: false, error: error.message }));
   });
 }
 
@@ -108,10 +118,27 @@ function stopCore() {
   return setSystemProxy(false);
 }
 
+function iconFile() {
+  const ico = app.isPackaged ? path.join(process.resourcesPath, "icon.ico") : path.join(__dirname, "icon.ico");
+  const png = app.isPackaged ? path.join(process.resourcesPath, "icon.png") : path.join(__dirname, "icon.png");
+  if (process.platform === "win32" && existsSync(ico)) return ico;
+  return png;
+}
+
+function emitLog(chunk) {
+  const text = chunk.toString();
+  if (!windowRef || windowRef.isDestroyed()) return;
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.replace(/\u001b\[[0-9;]*m/g, "").trim();
+    if (trimmed) windowRef.webContents.send("core:log", trimmed);
+  }
+}
+
 function waitAlive(child) {
   return new Promise((resolve) => {
     let text = "";
     const take = (chunk) => {
+      emitLog(chunk);
       text = (text + chunk.toString()).slice(-1200);
     };
     child.stdout?.on("data", take);
@@ -130,6 +157,46 @@ function waitAlive(child) {
 
 ipcMain.handle("core:stop", () => stopCore());
 
+ipcMain.handle("tray:set", (_event, on) => {
+  trayEnabled = Boolean(on);
+  if (trayEnabled) ensureTray();
+  else if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+});
+
+function showMain() {
+  if (!windowRef || windowRef.isDestroyed()) return;
+  windowRef.setSkipTaskbar(false);
+  if (windowRef.isMinimized()) windowRef.restore();
+  windowRef.show();
+  windowRef.focus();
+}
+
+function ensureTray() {
+  if (tray || !trayEnabled) return;
+  let image = nativeImage.createFromPath(iconFile());
+  if (image.isEmpty()) image = nativeImage.createFromDataURL("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAANBJREFUeNpi/P//P8NAAokE2NkYQdQ/gA4wMDAw/A/iHxgYGP4D8U8MDAz/AfEvDAwM/4H4HwYGhv9A/AcDAwM+IPqHgYGBnxD9w8DAwE8I/sHAwMBPCP7BwMDATwj+wcDAwE8I/sHAwMBPCP7BwMDATwj+wcDAwE8I/sHAwMBPCP7BwMDATwj+wcDAwE8I/sHAwMBPCP7BwMDATwj+wcDAwE8I/sHAwMBPCP7BwMDATwj+wcDAwE8I/sHAwMBPCP4D8Q8MDAz/gfgHBgYG/0D8AwMDA78h+IeBgYGfEP3DwMDAT4j+YWBg4CdE/zAwMPAjgAEA3y6vQd4n1n0AAAAASUVORK5CYII=");
+  tray = new Tray(image);
+  tray.setToolTip("Rivers");
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "Открыть", click: showMain },
+      { label: "Выключить профиль", click: () => void stopCore() },
+      {
+        label: "Выход",
+        click: () => {
+          quitting = true;
+          app.quit();
+        },
+      },
+    ]),
+  );
+  tray.on("click", showMain);
+  tray.on("double-click", showMain);
+}
+
 ipcMain.handle("core:start", async (_event, payload) => {
   await stopCore();
   const core = payload?.core === "sing-box" ? "sing-box" : "xray";
@@ -139,6 +206,7 @@ ipcMain.handle("core:start", async (_event, payload) => {
   mkdirSync(dir, { recursive: true });
   const configPath = path.join(dir, "config.json");
   writeFileSync(configPath, String(payload?.config ?? ""), "utf8");
+  emitLog(`запуск ${path.basename(exe)}`);
   const args = ["run", "-c", configPath];
   coreProc = spawn(exe, args, { cwd: binDir(), windowsHide: true });
   const alive = await waitAlive(coreProc);
@@ -146,22 +214,34 @@ ipcMain.handle("core:start", async (_event, payload) => {
     await stopCore();
     return { ok: false, error: alive.error };
   }
+  const running = coreProc;
+  running.once("exit", (code) => {
+    if (quitting || coreProc !== running) return;
+    coreProc = null;
+    emitLog(`ядро остановилось, код ${code}`);
+    void setSystemProxy(false);
+  });
   const mode = payload?.mode === "system" ? "system" : "tun";
-  if (core === "xray") {
-    const proxy = mode === "system" ? "127.0.0.1:10809" : "socks=127.0.0.1:10808";
-    await setSystemProxy(true, proxy);
+  if (core === "sing-box" && mode === "tun") {
     return {
       ok: true,
-      note:
-        mode === "system"
-          ? "Xray запущен, системный прокси 127.0.0.1:10809"
-          : "Xray не поднимает TUN. Включён системный прокси socks://127.0.0.1:10808",
+      note: "sing-box TUN. Рунет напрямую, остальное через VPN. Нужен запуск от имени администратора",
     };
   }
-  if (mode === "tun") {
-    return { ok: true, note: "sing-box TUN запущен. Если сети нет, открой Rivers от имени администратора" };
+  const proxy = core === "xray" ? "127.0.0.1:10809" : "127.0.0.1:2080";
+  const applied = await setSystemProxy(true, proxy);
+  const lead =
+    core === "xray"
+      ? `Xray. Рунет напрямую, остальное через прокси ${proxy}`
+      : `sing-box. Рунет напрямую, остальное через прокси ${proxy}`;
+  const extra =
+    core === "xray" && mode === "tun"
+      ? " У Xray нет TUN, включён системный прокси. Весь трафик — ядро sing-box, режим TUN, от администратора."
+      : "";
+  if (!applied.ok) {
+    return { ok: true, note: `${lead}. Системный прокси не включился: ${applied.error || "powershell"}` };
   }
-  return { ok: true, note: "sing-box запущен, системный прокси включён" };
+  return { ok: true, note: lead + extra };
 });
 
 async function openWindow() {
@@ -199,6 +279,21 @@ async function openWindow() {
     }
   });
   await win.loadURL(home);
+  win.on("close", (event) => {
+    if (trayEnabled && !quitting) {
+      event.preventDefault();
+      win.setSkipTaskbar(true);
+      win.hide();
+    }
+  });
+  win.on("minimize", (event) => {
+    if (!trayEnabled) return;
+    event.preventDefault();
+    win.setSkipTaskbar(true);
+    win.hide();
+  });
+  win.on("show", () => win.setSkipTaskbar(false));
+  ensureTray();
   win.show();
 }
 
@@ -208,6 +303,7 @@ async function shutdown() {
 }
 
 app.whenReady().then(async () => {
+  if (process.platform === "win32") app.setAppUserModelId("app.rivers.desktop");
   port = await freePort(47831);
   startServer();
   try {
@@ -227,10 +323,12 @@ app.on("second-instance", () => {
 });
 
 app.on("window-all-closed", () => {
+  if (trayEnabled) return;
   void shutdown().finally(() => app.quit());
 });
 
 app.on("before-quit", () => {
+  quitting = true;
   void stopCore();
   stopServer();
 });

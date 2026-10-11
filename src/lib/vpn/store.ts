@@ -57,6 +57,7 @@ type State = {
     lang: "ru" | "en";
     email: string;
     telegram: string;
+    routeFix: number;
   };
   stats: { sent: number; recv: number; days: { day: string; sent: number; recv: number }[] };
   logs: { id: string; at: number; level: "info" | "error"; text: string }[];
@@ -111,7 +112,7 @@ export const useVpn = create<State>()(
       core: "xray",
       mode: "tun",
       overrides: { xray: null, "sing-box": null },
-      settings: { autostart: false, tray: true, lang: "ru", email: "", telegram: "" },
+      settings: { autostart: false, tray: true, lang: "ru", email: "", telegram: "", routeFix: 1 },
       stats: { sent: 0, recv: 0, days: emptyWeek() },
       logs: [],
       setCore: (core) => set({ core }),
@@ -226,11 +227,16 @@ export const useVpn = create<State>()(
           ...saved,
           core: saved.core ?? current.core,
           mode: saved.mode ?? current.mode,
-          settings: { ...current.settings, ...saved.settings },
+          settings: { ...current.settings, ...saved.settings, routeFix: 1 },
           stats: saved.stats ?? current.stats,
           logs: saved.logs ?? current.logs,
           overrides: { ...current.overrides, ...saved.overrides },
-          tun: { ...current.tun, ...saved.tun },
+          tun: {
+            ...current.tun,
+            ...saved.tun,
+            strictRoute: saved.settings?.routeFix ? (saved.tun?.strictRoute ?? false) : false,
+            stack: saved.settings?.routeFix ? (saved.tun?.stack ?? "system") : "system",
+          },
           dns: { ...current.dns, ...saved.dns },
           geos: repairGeos(saved.geos, current.geos),
         };
