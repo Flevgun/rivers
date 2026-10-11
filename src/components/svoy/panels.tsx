@@ -1,0 +1,274 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
+import { cn } from "@/lib/cn";
+import { useVpn } from "@/lib/vpn/store";
+
+const APP_VERSION = "1.0.0";
+const CORE_VERSION = { xray: "Xray 26.2.6", "sing-box": "sing-box 1.12.0" } as const;
+
+function bytes(value: number) {
+  if (value < 1024) return `${value} Б`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} КБ`;
+  return `${(value / 1024 / 1024).toFixed(2)} МБ`;
+}
+
+function todayKey() {
+  const date = new Date();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+export function SettingsPanel() {
+  const { settings, stats, core, setSetting } = useVpn();
+  const lang = settings?.lang ?? "ru";
+  const en = lang === "en";
+  const device = useDevice();
+  const [chart, setChart] = useState(false);
+  useEffect(() => setChart(true), []);
+
+  const week = useMemo(() => {
+    const names = en ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+    return (stats?.days ?? []).map((item) => {
+      const date = new Date(`${item.day}T00:00:00`);
+      return { name: names[date.getDay()] ?? item.day.slice(5), sent: item.sent };
+    });
+  }, [en, stats?.days]);
+
+  const today = stats?.days?.find((item) => item.day === todayKey());
+
+  return (
+    <div className="flex flex-col gap-3">
+      <header className="mb-1">
+        <h1 className="text-2xl font-semibold tracking-tight">{en ? "Settings" : "Настройки"}</h1>
+      </header>
+
+      <section className="rounded-card border border-line bg-surface p-4">
+        <Switch
+          label={en ? "Start with the system" : "Автозапуск с системой"}
+          on={settings.autostart}
+          set={(autostart) => setSetting({ autostart })}
+        />
+        <Switch
+          label={en ? "Minimize to tray" : "Сворачивать в трей"}
+          on={settings.tray}
+          set={(tray) => setSetting({ tray })}
+        />
+        <div className="flex min-h-12 items-center justify-between gap-3">
+          <span className="text-sm">{en ? "Language" : "Язык"}</span>
+          <div className="flex gap-2">
+            {(
+              [
+                ["ru", "Русский"],
+                ["en", "English"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSetting({ lang: id })}
+                className={cn(
+                  "min-h-11 rounded-full px-3 text-sm",
+                  lang === id ? "bg-accent text-accent-ink" : "bg-raised text-muted",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-card border border-line bg-surface p-4">
+        <h2 className="text-sm font-semibold">{en ? "Traffic" : "Статистика"}</h2>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <Stat label={en ? "Sent today" : "Отправлено сегодня"} value={bytes(today?.sent ?? 0)} />
+          <Stat label={en ? "Received today" : "Получено сегодня"} value={bytes(today?.recv ?? 0)} />
+          <Stat label={en ? "Sent total" : "Отправлено всего"} value={bytes(stats?.sent ?? 0)} />
+          <Stat label={en ? "Received total" : "Получено всего"} value={bytes(stats?.recv ?? 0)} />
+        </div>
+        <p className="mt-4 text-xs text-muted">{en ? "Week" : "За неделю"}</p>
+        <div className="mt-2 h-36">
+          {chart && (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={week}>
+                <XAxis dataKey="name" tick={{ fill: "var(--color-muted)", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Bar dataKey="sent" fill="var(--color-accent)" radius={4} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-card border border-line bg-surface p-4">
+        <h2 className="text-sm font-semibold">{en ? "About" : "О приложении"}</h2>
+        <Row label={en ? "Version" : "Версия"} value={APP_VERSION} />
+        <Row label={en ? "Core" : "Ядро"} value={CORE_VERSION[core]} />
+        <Row label={en ? "System" : "Система"} value={device.system} />
+        <Row label={en ? "Architecture" : "Архитектура"} value={device.arch} />
+        <a
+          href="mailto:Flevgun@gmail.com"
+          className="flex min-h-11 items-center justify-between gap-3"
+          onClick={(event) => {
+            event.preventDefault();
+            window.location.href = "mailto:Flevgun@gmail.com";
+          }}
+        >
+          <span className="text-sm text-muted">Email</span>
+          <span className="text-sm text-accent">Flevgun@gmail.com</span>
+        </a>
+        <a
+          href="https://t.me/flevgun"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex min-h-11 items-center justify-between gap-3"
+          onClick={(event) => {
+            event.preventDefault();
+            window.open("https://t.me/flevgun", "_blank", "noopener,noreferrer");
+          }}
+        >
+          <span className="text-sm text-muted">Telegram</span>
+          <span className="text-sm text-accent">@flevgun</span>
+        </a>
+      </section>
+    </div>
+  );
+}
+
+export function LogsPanel() {
+  const { logs, clearLogs, settings } = useVpn();
+  const en = settings?.lang === "en";
+  const [notice, setNotice] = useState("");
+  const seen = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (seen.current === null) {
+      seen.current = logs.length;
+      return;
+    }
+    const previous = seen.current;
+    seen.current = logs.length;
+    if (previous <= 100 && logs.length > 100) saveLogs(logs);
+  }, [logs]);
+
+  function copyLogs() {
+    const text = formatLogs(logs);
+    if (logs.length > 100) {
+      saveLogs(logs);
+      setNotice(en ? "Saved" : "Сохранено");
+    } else {
+      void navigator.clipboard.writeText(text).then(() => setNotice(en ? "Copied" : "Скопировано"));
+    }
+    window.setTimeout(() => setNotice(""), 1600);
+  }
+
+  return (
+    <div>
+      <header className="mb-4 flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">{en ? "Logs" : "Логи"}</h1>
+        <div className="flex items-center gap-1">
+          {notice && <span className="text-xs text-muted">{notice}</span>}
+          <button
+            type="button"
+            onClick={copyLogs}
+            disabled={logs.length === 0}
+            className="min-h-11 rounded-full px-3 text-sm text-accent disabled:text-muted"
+          >
+            {en ? "Copy" : "Копировать"}
+          </button>
+          <button type="button" onClick={clearLogs} className="min-h-11 rounded-full px-3 text-sm text-muted">
+            {en ? "Clear" : "Очистить"}
+          </button>
+        </div>
+      </header>
+      {logs.length === 0 ? (
+        <p className="rounded-card border border-dashed border-line px-4 py-8 text-sm text-muted">
+          {en ? "No entries yet." : "Пока пусто."}
+        </p>
+      ) : (
+        <ul className="overflow-hidden rounded-card border border-line bg-surface">
+          {logs.map((entry, index) => (
+            <li key={entry.id} className={cn("px-4 py-3 font-mono text-xs leading-5", index > 0 && "border-t border-line")}>
+              <span className="text-muted">{new Date(entry.at).toLocaleString(en ? "en-GB" : "ru-RU")}</span>{" "}
+              <span className={entry.level === "error" ? "text-danger" : "text-fg"}>{entry.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function formatLogs(logs: { at: number; level: string; text: string }[]) {
+  return [...logs]
+    .reverse()
+    .map((entry) => `${new Date(entry.at).toLocaleString("ru-RU")} ${entry.level} ${entry.text}`)
+    .join("\n");
+}
+
+function saveLogs(logs: { at: number; level: string; text: string }[]) {
+  const blob = new Blob([formatLogs(logs)], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+  link.href = url;
+  link.download = `rivers-logs-${stamp}.txt`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function useDevice() {
+  const [info, setInfo] = useState({ system: "—", arch: "—" });
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    let system = "—";
+    if (/Windows/.test(ua)) system = "Windows";
+    else if (/Android/.test(ua)) system = "Android";
+    else if (/Mac OS/.test(ua)) system = "macOS";
+    else if (/Linux/.test(ua)) system = "Linux";
+    let arch = /Win64|x64|amd64|x86_64/i.test(ua) ? "x64" : /aarch64|arm64/i.test(ua) ? "arm64" : "—";
+    setInfo({ system, arch });
+    const data = (
+      navigator as Navigator & {
+        userAgentData?: { getHighEntropyValues: (hints: string[]) => Promise<{ architecture?: string; platform?: string }> };
+      }
+    ).userAgentData;
+    if (!data?.getHighEntropyValues) return;
+    void data.getHighEntropyValues(["architecture", "platform"]).then((value) => {
+      setInfo({
+        system: value.platform || system,
+        arch: value.architecture || arch,
+      });
+    });
+  }, []);
+  return info;
+}
+
+function Switch({ label, on, set }: { label: string; on: boolean; set: (value: boolean) => void }) {
+  return (
+    <button type="button" onClick={() => set(!on)} className="flex min-h-12 w-full items-center justify-between gap-3">
+      <span className="text-sm">{label}</span>
+      <span className={cn("h-7 w-12 rounded-full p-1", on ? "bg-accent" : "bg-raised")}>
+        <span className={cn("block size-5 rounded-full bg-fg", on && "translate-x-5 bg-accent-ink")} />
+      </span>
+    </button>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="font-mono text-sm font-semibold">{value}</div>
+      <div className="text-xs text-muted">{label}</div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-h-11 items-center justify-between gap-3">
+      <span className="text-sm text-muted">{label}</span>
+      <span className="text-sm">{value}</span>
+    </div>
+  );
+}
