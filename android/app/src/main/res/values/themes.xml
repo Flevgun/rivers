@@ -1,10 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Rivers" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">#07080a</item>
-        <item name="android:navigationBarColor">#07080a</item>
-        <item name="android:windowBackground">#07080a</item>
-        <item name="android:colorAccent">#3dffb0</item>
-        <item name="android:textColor">#e7efe9</item>
+        <item name="android:statusBarColor">#07080A</item>
+        <item name="android:navigationBarColor">#07080A</item>
+        <item name="android:windowBackground">#07080A</item>
+        <item name="android:colorAccent">#3DFFB0</item>
+        <item name="android:colorControlActivated">#3DFFB0</item>
+        <item name="android:textColor">#E7EFE9</item>
+        <item name="android:buttonStyle">@style/Rivers.Button</item>
+        <item name="android:alertDialogTheme">@style/Theme.Rivers.Dialog</item>
+    </style>
+
+    <style name="Rivers.Button" parent="android:Widget.Material.Button">
+        <item name="android:background">@drawable/bg_pill</item>
+        <item name="android:textColor">#E7EFE9</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:elevation">0dp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingLeft">18dp</item>
+        <item name="android:paddingRight">18dp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="Rivers.Power" parent="Rivers.Button">
+        <item name="android:background">@drawable/bg_power</item>
+        <item name="android:textColor">#07110C</item>
+        <item name="android:textSize">17sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:minHeight">58dp</item>
+    </style>
+
+    <style name="Theme.Rivers.Dialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">#3DFFB0</item>
+        <item name="android:textColorPrimary">#E7EFE9</item>
+        <item name="android:textColor">#E7EFE9</item>
+        <item name="android:background">#161B18</item>
+        <item name="android:windowBackground">#161B18</item>
     </style>
 </resources>

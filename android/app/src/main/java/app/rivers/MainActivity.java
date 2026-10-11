@@ -7,6 +7,7 @@ import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.net.VpnService;
 import android.os.Build;
@@ -50,11 +51,11 @@ public class MainActivity extends android.app.Activity {
     private TextView logs;
     private TextView appsHint;
     private Button power;
-    private Button tabHome;
-    private Button tabApps;
-    private Button tabLogs;
-    private Button modeDirect;
-    private Button modeVpn;
+    private TextView tabHome;
+    private TextView tabApps;
+    private TextView tabLogs;
+    private TextView modeDirect;
+    private TextView modeVpn;
     private View pageHome;
     private View pageApps;
     private View pageLogs;
@@ -65,8 +66,12 @@ public class MainActivity extends android.app.Activity {
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
+            boolean on = RiversVpnService.running;
             status.setText(RiversVpnService.status);
-            power.setText(RiversVpnService.running ? "Выключить" : "Включить");
+            status.setTextColor(on ? 0xFF3DFFB0 : 0xFF8B978F);
+            power.setText(on ? "Выключить" : "Включить");
+            power.setBackgroundResource(on ? R.drawable.bg_power_stop : R.drawable.bg_power);
+            power.setTextColor(on ? 0xFFFF8D97 : 0xFF07110C);
             if (tab == 2) logs.setText(LogBuffer.text());
             handler.postDelayed(this, 700);
         }
@@ -167,15 +172,21 @@ public class MainActivity extends android.app.Activity {
 
     private void paintMode() {
         boolean vpn = "vpn".equals(Store.appMode(this));
-        paintTab(modeDirect, !vpn);
-        paintTab(modeVpn, vpn);
+        paintSegment(modeDirect, !vpn);
+        paintSegment(modeVpn, vpn);
         appsHint.setText(vpn
                 ? "Только отмеченные идут в VPN. Остальные приложения — напрямую, мимо правил конфига. Применится после переподключения."
                 : "Отмеченные идут напрямую, мимо VPN. Остальные — по конфигу: рунет напрямую, прочее через VPN. Применится после переподключения.");
     }
 
-    private static void paintTab(Button button, boolean on) {
-        button.setTextColor(on ? 0xFF3DFFB0 : 0xFF8B978F);
+    private static void paintTab(TextView view, boolean on) {
+        view.setTextColor(on ? 0xFF3DFFB0 : 0xFF8B978F);
+        view.setTypeface(null, on ? Typeface.BOLD : Typeface.NORMAL);
+    }
+
+    private static void paintSegment(TextView view, boolean on) {
+        view.setBackgroundResource(on ? R.drawable.bg_choice_on : R.drawable.bg_choice_off);
+        view.setTextColor(on ? 0xFF07110C : 0xFF8B978F);
     }
 
     private void loadApps() {
@@ -230,6 +241,8 @@ public class MainActivity extends android.app.Activity {
         EditText input = new EditText(this);
         input.setMinLines(3);
         input.setTextColor(0xFFE7EFE9);
+        input.setBackgroundColor(0xFF101614);
+        input.setPadding(32, 24, 32, 24);
         new AlertDialog.Builder(this)
                 .setTitle(title)
                 .setView(input)
@@ -289,7 +302,8 @@ public class MainActivity extends android.app.Activity {
         List<String> labels = new ArrayList<>();
         for (Server server : list) labels.add(server.label());
         if (labels.isEmpty()) labels.add("Нет сервера");
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, R.layout.spinner_item, labels);
+        adapter.setDropDownViewResource(R.layout.spinner_item);
         servers.setAdapter(adapter);
         int active = Store.active(this);
         if (!list.isEmpty() && active >= 0 && active < list.size()) servers.setSelection(active);

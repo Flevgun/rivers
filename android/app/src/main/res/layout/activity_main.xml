@@ -20,20 +20,22 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="20dp">
+                android:padding="24dp">
 
                 <ImageView
                     android:layout_width="72dp"
                     android:layout_height="72dp"
                     android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="12dp"
                     android:contentDescription="Rivers"
                     android:src="@drawable/ic_launcher" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="14dp"
                     android:gravity="center"
+                    android:letterSpacing="0.04"
                     android:text="Rivers"
                     android:textSize="28sp"
                     android:textStyle="bold" />
@@ -42,51 +44,57 @@
                     android:id="@+id/status"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
                     android:gravity="center"
                     android:text="Выключен"
-                    android:textColor="#8b978f"
-                    android:textSize="16sp" />
+                    android:textColor="#8B978F"
+                    android:textSize="15sp" />
 
                 <Spinner
                     android:id="@+id/servers"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:layout_marginTop="16dp" />
+                    android:layout_height="52dp"
+                    android:layout_marginTop="28dp"
+                    android:background="@drawable/bg_card"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:popupBackground="#161B18" />
 
                 <Button
                     android:id="@+id/power"
+                    style="@style/Rivers.Power"
                     android:layout_width="match_parent"
-                    android:layout_height="64dp"
+                    android:layout_height="58dp"
                     android:layout_marginTop="16dp"
-                    android:text="Включить"
-                    android:textSize="18sp" />
+                    android:text="Включить" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Рунет напрямую, остальное через VPN. Исключения для приложений — во вкладке «Приложения»."
-                    android:textColor="#8b978f"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center"
+                    android:text="Рунет напрямую, остальное через VPN"
+                    android:textColor="#8B978F"
                     android:textSize="13sp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="20dp"
                     android:orientation="horizontal">
 
                     <Button
                         android:id="@+id/addLink"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_height="48dp"
                         android:layout_weight="1"
                         android:text="Ссылка" />
 
                     <Button
                         android:id="@+id/addSub"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="10dp"
                         android:layout_weight="1"
                         android:text="Подписка" />
                 </LinearLayout>
@@ -98,14 +106,17 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical"
-            android:padding="16dp"
+            android:paddingStart="20dp"
+            android:paddingTop="18dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="8dp"
             android:visibility="gone">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Приложения"
-                android:textSize="22sp"
+                android:textSize="26sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -113,46 +124,68 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:textColor="#8b978f"
+                android:textColor="#8B978F"
                 android:textSize="13sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
+                android:layout_marginTop="14dp"
+                android:background="@drawable/bg_segment"
+                android:orientation="horizontal"
+                android:padding="4dp">
 
-                <Button
+                <TextView
                     android:id="@+id/modeDirect"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="40dp"
                     android:layout_weight="1"
-                    android:text="Напрямую" />
+                    android:background="@drawable/bg_choice_on"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="Напрямую"
+                    android:textColor="#07110C"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
 
-                <Button
+                <TextView
                     android:id="@+id/modeVpn"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
+                    android:layout_height="40dp"
                     android:layout_weight="1"
-                    android:text="Через VPN" />
+                    android:background="@drawable/bg_choice_off"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="Через VPN"
+                    android:textColor="#8B978F"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
             </LinearLayout>
 
             <EditText
                 android:id="@+id/appSearch"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_height="48dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_field"
                 android:hint="Поиск"
                 android:inputType="text"
-                android:textColorHint="#8b978f" />
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:textColor="#E7EFE9"
+                android:textColorHint="#8B978F"
+                android:textSize="15sp" />
 
             <ListView
                 android:id="@+id/appList"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_marginTop="8dp"
-                android:layout_weight="1" />
+                android:layout_weight="1"
+                android:divider="#1C2420"
+                android:dividerHeight="1dp" />
         </LinearLayout>
 
         <LinearLayout
@@ -160,7 +193,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical"
-            android:padding="16dp"
+            android:padding="20dp"
             android:visibility="gone">
 
             <LinearLayout
@@ -174,21 +207,24 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Логи"
-                    android:textSize="22sp"
+                    android:textSize="26sp"
                     android:textStyle="bold" />
 
                 <Button
                     android:id="@+id/copyLogs"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_height="40dp"
+                    android:minHeight="40dp"
                     android:text="Копировать" />
             </LinearLayout>
 
             <ScrollView
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_marginTop="8dp"
-                android:layout_weight="1">
+                android:layout_marginTop="12dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_card"
+                android:padding="14dp">
 
                 <TextView
                     android:id="@+id/logs"
@@ -196,7 +232,7 @@
                     android:layout_height="wrap_content"
                     android:fontFamily="monospace"
                     android:text="Пока пусто."
-                    android:textColor="#c9d4cc"
+                    android:textColor="#C9D4CC"
                     android:textSize="12sp" />
             </ScrollView>
         </LinearLayout>
@@ -205,29 +241,45 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#101412"
+        android:background="@drawable/bg_tabbar"
         android:orientation="horizontal"
-        android:padding="6dp">
+        android:paddingTop="4dp"
+        android:paddingBottom="6dp">
 
-        <Button
+        <TextView
             android:id="@+id/tabHome"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_weight="1"
-            android:text="Главная" />
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="Главная"
+            android:textSize="13sp" />
 
-        <Button
+        <TextView
             android:id="@+id/tabApps"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_weight="1"
-            android:text="Приложения" />
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="Приложения"
+            android:textSize="13sp" />
 
-        <Button
+        <TextView
             android:id="@+id/tabLogs"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_weight="1"
-            android:text="Логи" />
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="Логи"
+            android:textSize="13sp" />
     </LinearLayout>
 </LinearLayout>
