@@ -123,6 +123,9 @@ export function ClientApp() {
   }, []);
   const lang = state.settings?.lang ?? "ru";
   const navText = NAV_TEXT[lang];
+  useEffect(() => {
+    document.documentElement.dataset.theme = state.settings?.theme ?? "mint";
+  }, [state.settings?.theme]);
   const server = state.servers.find((item) => item.id === state.activeId) ?? null;
   const clock = useClock(state.connected, state.startedAt);
   const generated = useMemo(

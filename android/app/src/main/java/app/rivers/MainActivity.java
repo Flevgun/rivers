@@ -7,8 +7,11 @@ import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.Bundle;
@@ -16,7 +19,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.graphics.drawable.ColorDrawable;
 import android.view.LayoutInflater;
+import android.view.Gravity;
+import android.view.WindowInsetsController;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -50,7 +56,23 @@ public class MainActivity extends android.app.Activity {
     private TextView status;
     private TextView logs;
     private TextView appsHint;
-    private Button power;
+    private TextView brandTitle;
+    private TextView brandSub;
+    private TextView homeHint;
+    private TextView themeLabel;
+    private TextView titleApps;
+    private TextView titleLogs;
+    private View power;
+    private View powerHalo;
+    private ImageView powerIcon;
+    private View logCard;
+    private View tabBar;
+    private View modeTrack;
+    private LinearLayout themes;
+    private Button addLink;
+    private Button addSub;
+    private Button copyLogs;
+    private EditText appSearch;
     private TextView tabHome;
     private TextView tabApps;
     private TextView tabLogs;
@@ -67,11 +89,8 @@ public class MainActivity extends android.app.Activity {
         @Override
         public void run() {
             boolean on = RiversVpnService.running;
-            status.setText(RiversVpnService.status);
-            status.setTextColor(on ? 0xFF3DFFB0 : 0xFF8B978F);
-            power.setText(on ? "Выключить" : "Включить");
-            power.setBackgroundResource(on ? R.drawable.bg_power_stop : R.drawable.bg_power);
-            power.setTextColor(on ? 0xFFFF8D97 : 0xFF07110C);
+            status.setText(on ? "Профиль включён" : RiversVpnService.status);
+            paintChrome();
             if (tab == 2) logs.setText(LogBuffer.text());
             handler.postDelayed(this, 700);
         }
@@ -84,6 +103,22 @@ public class MainActivity extends android.app.Activity {
         status = findViewById(R.id.status);
         logs = findViewById(R.id.logs);
         power = findViewById(R.id.power);
+        powerHalo = findViewById(R.id.powerHalo);
+        powerIcon = findViewById(R.id.powerIcon);
+        brandTitle = findViewById(R.id.brandTitle);
+        brandSub = findViewById(R.id.brandSub);
+        homeHint = findViewById(R.id.homeHint);
+        themeLabel = findViewById(R.id.themeLabel);
+        titleApps = findViewById(R.id.titleApps);
+        titleLogs = findViewById(R.id.titleLogs);
+        logCard = findViewById(R.id.logCard);
+        tabBar = findViewById(R.id.tabBar);
+        modeTrack = findViewById(R.id.modeTrack);
+        themes = findViewById(R.id.themes);
+        addLink = findViewById(R.id.addLink);
+        addSub = findViewById(R.id.addSub);
+        copyLogs = findViewById(R.id.copyLogs);
+        appSearch = findViewById(R.id.appSearch);
         servers = findViewById(R.id.servers);
         appsHint = findViewById(R.id.appsHint);
         pageHome = findViewById(R.id.pageHome);
@@ -101,7 +136,7 @@ public class MainActivity extends android.app.Activity {
             apps.toggle(position);
             toast(RiversVpnService.running ? "Переподключи, чтобы применить" : "Сохранено");
         });
-        ((EditText) findViewById(R.id.appSearch)).addTextChangedListener(new TextWatcher() {
+        ((EditText) appSearch).addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
 
@@ -119,8 +154,10 @@ public class MainActivity extends android.app.Activity {
         modeDirect.setOnClickListener(view -> setMode("direct"));
         modeVpn.setOnClickListener(view -> setMode("vpn"));
         paintMode();
+        buildThemes();
         reloadServers();
         loadApps();
+        applyTheme();
         power.setOnClickListener(view -> {
             if (RiversVpnService.running) {
                 startService(new Intent(this, RiversVpnService.class).setAction(RiversVpnService.ACTION_STOP));
@@ -179,14 +216,101 @@ public class MainActivity extends android.app.Activity {
                 : "Отмеченные идут напрямую, мимо VPN. Остальные — по конфигу: рунет напрямую, прочее через VPN. Применится после переподключения.");
     }
 
-    private static void paintTab(TextView view, boolean on) {
-        view.setTextColor(on ? 0xFF3DFFB0 : 0xFF8B978F);
+    private void paintChrome() {
+        Palette palette = Palette.current(this);
+        boolean on = RiversVpnService.running;
+        status.setTextColor(on ? palette.accent : palette.fg);
+        int stroke = Math.max(2, (int) Palette.dp(this, 2));
+        power.setBackground(Palette.circle(on ? palette.accent : palette.surface, on ? palette.accent : palette.line, stroke));
+        powerHalo.setBackground(Palette.circle((palette.accent & 0x00FFFFFF) | 0x2E000000, 0, 0));
+        powerHalo.setVisibility(on ? View.VISIBLE : View.INVISIBLE);
+        powerIcon.setImageTintList(ColorStateList.valueOf(on ? palette.ink : palette.fg));
+    }
+
+    private void applyTheme() {
+        Palette palette = Palette.current(this);
+        getWindow().setStatusBarColor(palette.bg);
+        getWindow().setNavigationBarColor(palette.bg);
+        getWindow().getDecorView().setBackgroundColor(palette.bg);
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                controller.setSystemBarsAppearance("paper".equals(palette.id) ? mask : 0, mask);
+            }
+        }
+        brandTitle.setTextColor(palette.fg);
+        brandSub.setTextColor(palette.muted);
+        homeHint.setTextColor(palette.muted);
+        themeLabel.setTextColor(palette.muted);
+        titleApps.setTextColor(palette.fg);
+        titleLogs.setTextColor(palette.fg);
+        appsHint.setTextColor(palette.muted);
+        logs.setTextColor(palette.fg);
+        pill(addLink, palette.raised, palette.fg);
+        pill(addSub, palette.raised, palette.fg);
+        pill(copyLogs, palette.raised, palette.fg);
+        modeTrack.setBackground(Palette.round(this, palette.surface, palette.line, 16));
+        appSearch.setBackground(Palette.round(this, palette.bg, palette.line, 16));
+        appSearch.setTextColor(palette.fg);
+        appSearch.setHintTextColor(palette.muted);
+        logCard.setBackground(Palette.round(this, palette.surface, palette.line, 20));
+        tabBar.setBackgroundColor(palette.bg);
+        servers.setBackground(Palette.round(this, palette.raised, 0, 24));
+        servers.setPopupBackgroundDrawable(new ColorDrawable(palette.surface));
+        paintChrome();
+        paintMode();
+        showTab(tab);
+        paintThemeChips();
+        if (apps != null) apps.notifyDataSetChanged();
+    }
+
+    private void pill(Button button, int fill, int text) {
+        button.setBackground(Palette.round(this, fill, 0, 22));
+        button.setTextColor(text);
+    }
+
+    private void buildThemes() {
+        themes.removeAllViews();
+        int pad = (int) Palette.dp(this, 16);
+        for (Palette palette : Palette.all()) {
+            TextView chip = new TextView(this);
+            chip.setText(palette.name);
+            chip.setGravity(Gravity.CENTER);
+            chip.setTextSize(14);
+            chip.setPadding(pad, 0, pad, 0);
+            chip.setTag(palette.id);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, (int) Palette.dp(this, 44));
+            params.setMarginEnd((int) Palette.dp(this, 8));
+            chip.setLayoutParams(params);
+            chip.setOnClickListener(view -> {
+                Store.setTheme(this, palette.id);
+                applyTheme();
+            });
+            themes.addView(chip);
+        }
+    }
+
+    private void paintThemeChips() {
+        Palette palette = Palette.current(this);
+        for (int i = 0; i < themes.getChildCount(); i++) {
+            TextView chip = (TextView) themes.getChildAt(i);
+            boolean on = palette.id.equals(chip.getTag());
+            chip.setBackground(Palette.round(this, on ? palette.accent : palette.raised, 0, 22));
+            chip.setTextColor(on ? palette.ink : palette.muted);
+        }
+    }
+
+    private void paintTab(TextView view, boolean on) {
+        Palette palette = Palette.current(this);
+        view.setTextColor(on ? palette.accent : palette.muted);
         view.setTypeface(null, on ? Typeface.BOLD : Typeface.NORMAL);
     }
 
-    private static void paintSegment(TextView view, boolean on) {
-        view.setBackgroundResource(on ? R.drawable.bg_choice_on : R.drawable.bg_choice_off);
-        view.setTextColor(on ? 0xFF07110C : 0xFF8B978F);
+    private void paintSegment(TextView view, boolean on) {
+        Palette palette = Palette.current(this);
+        view.setBackground(Palette.round(this, on ? palette.accent : 0x00000000, 0, 12));
+        view.setTextColor(on ? palette.ink : palette.muted);
     }
 
     private void loadApps() {
@@ -243,12 +367,17 @@ public class MainActivity extends android.app.Activity {
         input.setTextColor(0xFFE7EFE9);
         input.setBackgroundColor(0xFF101614);
         input.setPadding(32, 24, 32, 24);
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(title)
                 .setView(input)
-                .setPositiveButton("Добавить", (dialog, which) -> onOk.accept(input.getText().toString().trim()))
+                .setPositiveButton("Добавить", (d, which) -> onOk.accept(input.getText().toString().trim()))
                 .setNegativeButton("Отмена", null)
-                .show();
+                .create();
+        dialog.show();
+        Palette palette = Palette.current(this);
+        if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(palette.surface));
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(palette.accent);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(palette.muted);
     }
 
     private void addText(String text) {
@@ -302,12 +431,30 @@ public class MainActivity extends android.app.Activity {
         List<String> labels = new ArrayList<>();
         for (Server server : list) labels.add(server.label());
         if (labels.isEmpty()) labels.add("Нет сервера");
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, R.layout.spinner_item, labels);
-        adapter.setDropDownViewResource(R.layout.spinner_item);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, R.layout.spinner_item, labels) {
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                return tintSpinner(super.getView(position, convertView, parent), false);
+            }
+
+            @Override
+            public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                return tintSpinner(super.getDropDownView(position, convertView, parent), true);
+            }
+        };
         servers.setAdapter(adapter);
         int active = Store.active(this);
         if (!list.isEmpty() && active >= 0 && active < list.size()) servers.setSelection(active);
         servers.setEnabled(!list.isEmpty());
+    }
+
+    private View tintSpinner(View view, boolean drop) {
+        Palette palette = Palette.current(this);
+        if (view instanceof TextView) {
+            ((TextView) view).setTextColor(palette.fg);
+            view.setBackgroundColor(drop ? palette.surface : 0x00000000);
+        }
+        return view;
     }
 
     private static String read(InputStream stream) throws java.io.IOException {
@@ -401,10 +548,17 @@ public class MainActivity extends android.app.Activity {
             View view = convert;
             if (view == null) view = LayoutInflater.from(MainActivity.this).inflate(R.layout.item_app, parent, false);
             AppRow row = shown.get(position);
+            Palette palette = Palette.current(MainActivity.this);
             ((ImageView) view.findViewById(R.id.icon)).setImageDrawable(row.icon);
-            ((TextView) view.findViewById(R.id.label)).setText(row.label);
-            ((TextView) view.findViewById(R.id.pkg)).setText(row.pkg);
-            ((CheckBox) view.findViewById(R.id.check)).setChecked(row.checked);
+            TextView label = view.findViewById(R.id.label);
+            TextView pkg = view.findViewById(R.id.pkg);
+            CheckBox check = view.findViewById(R.id.check);
+            label.setText(row.label);
+            label.setTextColor(palette.fg);
+            pkg.setText(row.pkg);
+            pkg.setTextColor(palette.muted);
+            check.setChecked(row.checked);
+            check.setButtonTintList(ColorStateList.valueOf(palette.accent));
             return view;
         }
     }

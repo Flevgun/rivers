@@ -3,7 +3,7 @@ import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
 import { cn } from "@/lib/cn";
 import { useVpn } from "@/lib/vpn/store";
 
-const APP_VERSION = "1.3.1";
+const APP_VERSION = "1.5.0";
 const CORE_VERSION = { xray: "Xray", "sing-box": "sing-box 1.12.12" } as const;
 
 function bytes(value: number) {
@@ -57,6 +57,31 @@ export function SettingsPanel() {
             void (window as unknown as { rivers?: { setTray?: (on: boolean) => void } }).rivers?.setTray?.(tray);
           }}
         />
+        <div className="flex min-h-12 items-center justify-between gap-3">
+          <span className="text-sm">{en ? "Theme" : "Тема"}</span>
+          <div className="flex flex-wrap justify-end gap-2">
+            {(
+              [
+                ["mint", en ? "Mint" : "Мята"],
+                ["night", en ? "Night" : "Ночь"],
+                ["paper", en ? "Paper" : "Бумага"],
+                ["amber", en ? "Amber" : "Янтарь"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSetting({ theme: id })}
+                className={cn(
+                  "min-h-11 rounded-full px-3 text-sm",
+                  (settings.theme ?? "mint") === id ? "bg-accent text-accent-ink" : "bg-raised text-muted",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex min-h-12 items-center justify-between gap-3">
           <span className="text-sm">{en ? "Language" : "Язык"}</span>
           <div className="flex gap-2">

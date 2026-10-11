@@ -24,6 +24,42 @@
     min-height: 100%;
   }
 
+  html[data-theme="night"] {
+    --color-bg: #07080f;
+    --color-surface: #12141c;
+    --color-raised: #1c2030;
+    --color-fg: #f2f4f7;
+    --color-muted: #8b93a8;
+    --color-accent: #8ea2ff;
+    --color-accent-ink: #0c1230;
+    --color-danger: #ff5d6c;
+    --color-line: #2a2e42;
+  }
+
+  html[data-theme="paper"] {
+    --color-bg: #f3f5f7;
+    --color-surface: #ffffff;
+    --color-raised: #e7ebf0;
+    --color-fg: #121418;
+    --color-muted: #5c6570;
+    --color-accent: #0c8f62;
+    --color-accent-ink: #f4fff9;
+    --color-danger: #d21b3a;
+    --color-line: #d5dbe3;
+  }
+
+  html[data-theme="amber"] {
+    --color-bg: #100e0b;
+    --color-surface: #1a1612;
+    --color-raised: #262018;
+    --color-fg: #f6f1e8;
+    --color-muted: #a39888;
+    --color-accent: #ffb020;
+    --color-accent-ink: #2a1c00;
+    --color-danger: #ff5d6c;
+    --color-line: #3a3228;
+  }
+
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;

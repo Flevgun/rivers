@@ -18,86 +18,152 @@
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
                 android:orientation="vertical"
-                android:padding="24dp">
-
-                <ImageView
-                    android:layout_width="72dp"
-                    android:layout_height="72dp"
-                    android:layout_gravity="center_horizontal"
-                    android:layout_marginTop="12dp"
-                    android:contentDescription="Rivers"
-                    android:src="@drawable/ic_launcher" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:gravity="center"
-                    android:letterSpacing="0.04"
-                    android:text="Rivers"
-                    android:textSize="28sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/status"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:gravity="center"
-                    android:text="Выключен"
-                    android:textColor="#8B978F"
-                    android:textSize="15sp" />
-
-                <Spinner
-                    android:id="@+id/servers"
-                    android:layout_width="match_parent"
-                    android:layout_height="52dp"
-                    android:layout_marginTop="28dp"
-                    android:background="@drawable/bg_card"
-                    android:paddingStart="16dp"
-                    android:paddingEnd="16dp"
-                    android:popupBackground="#161B18" />
-
-                <Button
-                    android:id="@+id/power"
-                    style="@style/Rivers.Power"
-                    android:layout_width="match_parent"
-                    android:layout_height="58dp"
-                    android:layout_marginTop="16dp"
-                    android:text="Включить" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:gravity="center"
-                    android:text="Рунет напрямую, остальное через VPN"
-                    android:textColor="#8B978F"
-                    android:textSize="13sp" />
+                android:paddingStart="20dp"
+                android:paddingTop="12dp"
+                android:paddingEnd="20dp"
+                android:paddingBottom="16dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:contentDescription="Rivers"
+                        android:src="@drawable/ic_launcher" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/brandTitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Rivers"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/brandSub"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="личный клиент"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical">
+
+                    <FrameLayout
+                        android:layout_width="200dp"
+                        android:layout_height="200dp"
+                        android:layout_marginTop="12dp">
+
+                        <View
+                            android:id="@+id/powerHalo"
+                            android:layout_width="200dp"
+                            android:layout_height="200dp" />
+
+                        <FrameLayout
+                            android:id="@+id/power"
+                            android:layout_width="176dp"
+                            android:layout_height="176dp"
+                            android:layout_gravity="center"
+                            android:clickable="true"
+                            android:focusable="true">
+
+                            <ImageView
+                                android:id="@+id/powerIcon"
+                                android:layout_width="52dp"
+                                android:layout_height="52dp"
+                                android:layout_gravity="center"
+                                android:contentDescription="Питание"
+                                android:src="@drawable/ic_power" />
+                        </FrameLayout>
+                    </FrameLayout>
+
+                    <TextView
+                        android:id="@+id/status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center"
+                        android:text="Выключен"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <Spinner
+                        android:id="@+id/servers"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="12dp"
+                        android:paddingStart="18dp"
+                        android:paddingEnd="18dp" />
+
+                    <TextView
+                        android:id="@+id/homeHint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center"
+                        android:text="Рунет напрямую, остальное через VPN"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:orientation="horizontal">
 
                     <Button
                         android:id="@+id/addLink"
                         android:layout_width="0dp"
-                        android:layout_height="48dp"
+                        android:layout_height="44dp"
                         android:layout_weight="1"
                         android:text="Ссылка" />
 
                     <Button
                         android:id="@+id/addSub"
                         android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="10dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="8dp"
                         android:layout_weight="1"
                         android:text="Подписка" />
                 </LinearLayout>
+
+                <TextView
+                    android:id="@+id/themeLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="Тема"
+                    android:textSize="12sp" />
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:id="@+id/themes"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal" />
+                </HorizontalScrollView>
             </LinearLayout>
         </ScrollView>
 
@@ -113,6 +179,7 @@
             android:visibility="gone">
 
             <TextView
+                android:id="@+id/titleApps"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Приложения"
@@ -128,10 +195,10 @@
                 android:textSize="13sp" />
 
             <LinearLayout
+                android:id="@+id/modeTrack"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
-                android:background="@drawable/bg_segment"
                 android:orientation="horizontal"
                 android:padding="4dp">
 
@@ -203,6 +270,7 @@
                 android:orientation="horizontal">
 
                 <TextView
+                    android:id="@+id/titleLogs"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -219,11 +287,11 @@
             </LinearLayout>
 
             <ScrollView
+                android:id="@+id/logCard"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_marginTop="12dp"
                 android:layout_weight="1"
-                android:background="@drawable/bg_card"
                 android:padding="14dp">
 
                 <TextView
@@ -239,9 +307,9 @@
     </FrameLayout>
 
     <LinearLayout
+        android:id="@+id/tabBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/bg_tabbar"
         android:orientation="horizontal"
         android:paddingTop="4dp"
         android:paddingBottom="6dp">

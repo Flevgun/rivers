@@ -57,6 +57,14 @@ public final class Store {
         prefs(context).edit().putString("appMode", "vpn".equals(mode) ? "vpn" : "direct").apply();
     }
 
+    public static String theme(Context context) {
+        return prefs(context).getString("theme", "mint");
+    }
+
+    public static void setTheme(Context context, String id) {
+        prefs(context).edit().putString("theme", id).apply();
+    }
+
     public static java.util.Set<String> appPackages(Context context) {
         java.util.Set<String> set = new java.util.LinkedHashSet<>();
         try {

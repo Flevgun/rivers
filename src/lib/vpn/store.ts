@@ -55,6 +55,7 @@ type State = {
     autostart: boolean;
     tray: boolean;
     lang: "ru" | "en";
+    theme: "mint" | "night" | "paper" | "amber";
     email: string;
     telegram: string;
     routeFix: number;
@@ -113,7 +114,7 @@ export const useVpn = create<State>()(
       core: "xray",
       mode: "tun",
       overrides: { xray: null, "sing-box": null },
-      settings: { autostart: false, tray: true, lang: "ru", email: "", telegram: "", routeFix: 1 },
+      settings: { autostart: false, tray: true, lang: "ru", theme: "mint", email: "", telegram: "", routeFix: 1 },
       stats: { sent: 0, recv: 0, days: emptyWeek() },
       logs: [],
       setCore: (core) => set({ core }),
@@ -234,7 +235,7 @@ export const useVpn = create<State>()(
           ...saved,
           core: saved.core ?? current.core,
           mode: saved.mode ?? current.mode,
-          settings: { ...current.settings, ...saved.settings, routeFix: 1 },
+          settings: { ...current.settings, ...saved.settings, routeFix: 1, theme: saved.settings?.theme ?? "mint" },
           stats: saved.stats ?? current.stats,
           logs: saved.logs ?? current.logs,
           overrides: { ...current.overrides, ...saved.overrides },
