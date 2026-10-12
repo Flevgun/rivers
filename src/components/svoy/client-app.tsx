@@ -6,6 +6,7 @@ import {
   Gauge,
   Globe,
   Loader2,
+  Menu,
   Plus,
   Power,
   RefreshCw,
@@ -15,6 +16,7 @@ import {
   ScrollText,
   Settings,
   Trash2,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
@@ -74,6 +76,8 @@ type RiversBridge = {
   start: (payload: { core: string; mode: string; config: string }) => Promise<{ ok: boolean; error?: string; note?: string }>;
   stop: () => Promise<void>;
   setTray?: (on: boolean) => Promise<void>;
+  latestRelease?: () => Promise<{ newer?: boolean; latest?: string; url?: string }>;
+  openRelease?: (url: string) => Promise<boolean>;
   onLog?: (callback: (line: string) => void) => () => void;
 };
 
@@ -93,6 +97,8 @@ function useClock(active: boolean, startedAt: number | null) {
 
 export function ClientApp() {
   const [tab, setTab] = useState<Tab>("home");
+  const [navOpen, setNavOpen] = useState(false);
+  const [release, setRelease] = useState<{ latest: string; url: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [testing, setTesting] = useState(false);
   const [delay, setDelay] = useState<number | null>(null);
@@ -120,6 +126,15 @@ export function ClientApp() {
       alive = false;
       off();
     };
+  }, []);
+  useEffect(() => {
+    const bridge = (window as unknown as { rivers?: RiversBridge }).rivers;
+    void bridge
+      ?.latestRelease?.()
+      .then((info) => {
+        if (info?.newer && info.latest && info.url) setRelease({ latest: info.latest, url: info.url });
+      })
+      .catch(() => {});
   }, []);
   const lang = state.settings?.lang ?? "ru";
   const navText = NAV_TEXT[lang];
@@ -152,23 +167,35 @@ export function ClientApp() {
 
   return (
     <main className="min-h-dvh bg-bg text-fg">
-      <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col md:flex-row">
-        <aside className="hidden w-56 shrink-0 flex-col border-r border-line px-4 py-6 md:flex">
-          <Brand />
-          <nav className="mt-8 flex flex-col gap-1">
-            {NAV.map((item) => (
-              <NavButton
-                key={item.id}
-                item={item}
-                label={navText[item.id]}
-                active={tab === item.id}
-                onClick={() => setTab(item.id)}
-              />
-            ))}
-          </nav>
-        </aside>
+      <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col">
+        <header className="hidden items-center gap-3 border-b border-line px-4 py-3 md:flex">
+          <button
+            type="button"
+            aria-label={lang === "en" ? "Menu" : "Меню"}
+            onClick={() => setNavOpen(true)}
+            className="grid size-11 place-items-center rounded-full bg-surface text-fg"
+          >
+            <Menu size={22} />
+          </button>
+          <div className="text-sm font-semibold tracking-wide">Rivers</div>
+        </header>
 
         <section className="flex min-h-dvh flex-1 flex-col px-4 pt-5 pb-24 md:px-8 md:pb-8">
+          {release && (
+            <button
+              type="button"
+              onClick={() => {
+                const bridge = (window as unknown as { rivers?: RiversBridge }).rivers;
+                void bridge?.openRelease?.(release.url);
+              }}
+              className="mb-4 flex min-h-12 items-center justify-between gap-3 rounded-full bg-accent px-4 text-left text-sm font-semibold text-accent-ink"
+            >
+              <span>
+                {lang === "en" ? `Version ${release.latest} is available` : `Есть версия ${release.latest}`}
+              </span>
+              <span>{lang === "en" ? "Open" : "Открыть"}</span>
+            </button>
+          )}
           {tab !== "home" && (
             <div className="mb-4 flex items-center justify-between md:hidden">
               <Brand />
@@ -272,6 +299,44 @@ export function ClientApp() {
         </section>
       </div>
 
+      {navOpen && (
+        <div className="fixed inset-0 z-30 hidden md:block">
+          <button
+            type="button"
+            aria-label={lang === "en" ? "Close menu" : "Закрыть меню"}
+            className="absolute inset-0 bg-bg/70"
+            onClick={() => setNavOpen(false)}
+          />
+          <aside className="relative flex h-full w-72 flex-col border-r border-line bg-surface px-4 py-6">
+            <div className="flex items-center justify-between">
+              <Brand />
+              <button
+                type="button"
+                aria-label={lang === "en" ? "Close" : "Закрыть"}
+                onClick={() => setNavOpen(false)}
+                className="grid size-11 place-items-center rounded-full text-muted"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <nav className="mt-8 flex flex-col gap-1">
+              {NAV.map((item) => (
+                <NavButton
+                  key={item.id}
+                  item={item}
+                  label={navText[item.id]}
+                  active={tab === item.id}
+                  onClick={() => {
+                    setTab(item.id);
+                    setNavOpen(false);
+                  }}
+                />
+              ))}
+            </nav>
+          </aside>
+        </div>
+      )}
+
       <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-bg/95 backdrop-blur md:hidden">
         <div className="no-scrollbar flex gap-1 overflow-x-auto px-2 py-2">
           {NAV.map((item) => (
@@ -300,7 +365,6 @@ function Brand() {
       <img src="/icon.png" alt="" className="size-9 rounded-xl" />
       <div>
         <div className="text-sm font-semibold tracking-wide">Rivers</div>
-        <div className="text-xs text-muted">личный клиент</div>
       </div>
     </div>
   );

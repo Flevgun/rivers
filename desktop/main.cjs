@@ -2,6 +2,7 @@ const { app, BrowserWindow, shell, ipcMain, session, Tray, Menu, nativeImage, cl
 const { spawn } = require("node:child_process");
 const { existsSync, mkdirSync, writeFileSync } = require("node:fs");
 const http = require("node:http");
+const https = require("node:https");
 const net = require("node:net");
 const path = require("node:path");
 
@@ -156,6 +157,62 @@ function waitAlive(child) {
 }
 
 ipcMain.handle("core:stop", () => stopCore());
+
+function compareVersions(left, right) {
+  const a = String(left).replace(/^v/, "").split(".").map((part) => parseInt(part, 10) || 0);
+  const b = String(right).replace(/^v/, "").split(".").map((part) => parseInt(part, 10) || 0);
+  const length = Math.max(a.length, b.length);
+  for (let i = 0; i < length; i += 1) {
+    const diff = (a[i] || 0) - (b[i] || 0);
+    if (diff) return diff;
+  }
+  return 0;
+}
+
+function getJson(url) {
+  return new Promise((resolve, reject) => {
+    const request = https.get(
+      url,
+      { headers: { "User-Agent": "Rivers", Accept: "application/vnd.github+json" } },
+      (response) => {
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          response.resume();
+          getJson(response.headers.location).then(resolve, reject);
+          return;
+        }
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () => {
+          try {
+            resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+          } catch (error) {
+            reject(error);
+          }
+        });
+      },
+    );
+    request.on("error", reject);
+    request.setTimeout(12000, () => request.destroy(new Error("timeout")));
+  });
+}
+
+ipcMain.handle("app:latest", async () => {
+  const data = await getJson("https://api.github.com/repos/Flevgun/rivers/releases/latest");
+  const latest = String(data.tag_name || "").replace(/^v/, "");
+  const current = app.getVersion();
+  return {
+    current,
+    latest,
+    newer: compareVersions(latest, current) > 0,
+    url: typeof data.html_url === "string" ? data.html_url : "https://github.com/Flevgun/rivers/releases/latest",
+  };
+});
+
+ipcMain.handle("app:open", (_event, url) => {
+  const target = String(url || "");
+  if (!target.startsWith("https://github.com/Flevgun/rivers/")) return false;
+  return shell.openExternal(target);
+});
 
 ipcMain.handle("logs:copy", async (_event, text) => {
   const body = String(text ?? "");

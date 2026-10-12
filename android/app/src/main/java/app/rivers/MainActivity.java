@@ -7,6 +7,8 @@ import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.net.Uri;
+import android.provider.Settings;
 import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -36,7 +38,11 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.core.content.FileProvider;
+
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -57,7 +63,6 @@ public class MainActivity extends android.app.Activity {
     private TextView logs;
     private TextView appsHint;
     private TextView brandTitle;
-    private TextView brandSub;
     private TextView homeHint;
     private TextView themeLabel;
     private TextView titleApps;
@@ -82,6 +87,8 @@ public class MainActivity extends android.app.Activity {
     private ImageView tabSettings;
     private TextView openApps;
     private TextView openLogs;
+    private TextView openUpdate;
+    private TextView updateBanner;
     private TextView backApps;
     private TextView backLogs;
     private TextView modeDirect;
@@ -93,7 +100,10 @@ public class MainActivity extends android.app.Activity {
     private View pageSettings;
     private AppAdapter apps;
     private boolean spinning;
+    private boolean updating;
     private int tab;
+    private String pendingApk = "";
+    private String pendingPage = "https://github.com/Flevgun/rivers/releases/latest";
     private final Set<String> folded = new HashSet<>();
 
     private final Runnable tick = new Runnable() {
@@ -117,8 +127,8 @@ public class MainActivity extends android.app.Activity {
         powerHalo = findViewById(R.id.powerHalo);
         powerIcon = findViewById(R.id.powerIcon);
         brandTitle = findViewById(R.id.brandTitle);
-        brandSub = findViewById(R.id.brandSub);
         homeHint = findViewById(R.id.homeHint);
+        updateBanner = findViewById(R.id.updateBanner);
         themeLabel = findViewById(R.id.themeLabel);
         titleApps = findViewById(R.id.titleApps);
         titleLogs = findViewById(R.id.titleLogs);
@@ -146,6 +156,7 @@ public class MainActivity extends android.app.Activity {
         tabSettings = findViewById(R.id.tabSettings);
         openApps = findViewById(R.id.openApps);
         openLogs = findViewById(R.id.openLogs);
+        openUpdate = findViewById(R.id.openUpdate);
         backApps = findViewById(R.id.backApps);
         backLogs = findViewById(R.id.backLogs);
         modeDirect = findViewById(R.id.modeDirect);
@@ -174,6 +185,11 @@ public class MainActivity extends android.app.Activity {
         tabSettings.setOnClickListener(view -> showTab(2));
         openApps.setOnClickListener(view -> showTab(3));
         openLogs.setOnClickListener(view -> showTab(4));
+        openUpdate.setOnClickListener(view -> {
+            if (updateBanner.getVisibility() == View.VISIBLE) startUpdate();
+            else checkUpdate(true);
+        });
+        updateBanner.setOnClickListener(view -> startUpdate());
         backApps.setOnClickListener(view -> showTab(2));
         backLogs.setOnClickListener(view -> showTab(2));
         serverName.setOnClickListener(view -> showTab(1));
@@ -199,6 +215,7 @@ public class MainActivity extends android.app.Activity {
             toast("Логи в буфере");
         });
         showTab(0);
+        checkUpdate(false);
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 8);
         }
@@ -268,8 +285,9 @@ public class MainActivity extends android.app.Activity {
             }
         }
         brandTitle.setTextColor(palette.fg);
-        brandSub.setTextColor(palette.muted);
         homeHint.setTextColor(palette.muted);
+        updateBanner.setTextColor(palette.ink);
+        updateBanner.setBackground(Palette.round(this, palette.accent, 0, 16));
         themeLabel.setTextColor(palette.fg);
         titleApps.setTextColor(palette.fg);
         titleLogs.setTextColor(palette.fg);
@@ -281,8 +299,10 @@ public class MainActivity extends android.app.Activity {
         backLogs.setTextColor(palette.accent);
         openApps.setTextColor(palette.fg);
         openLogs.setTextColor(palette.fg);
+        openUpdate.setTextColor(palette.fg);
         openApps.setBackground(Palette.round(this, palette.surface, palette.line, 16));
         openLogs.setBackground(Palette.round(this, palette.surface, palette.line, 16));
+        openUpdate.setBackground(Palette.round(this, palette.surface, palette.line, 16));
         logs.setTextColor(palette.fg);
         pill(addLink, palette.raised, palette.fg);
         pill(addSub, palette.accent, palette.ink);
@@ -688,6 +708,105 @@ public class MainActivity extends android.app.Activity {
             }
         }
         return builder.toString();
+    }
+
+    private void checkUpdate(boolean manual) {
+        if (manual) toast("Проверяю обновление");
+        new Thread(() -> {
+            try {
+                Updater.Release release = Updater.latest();
+                boolean newer = Updater.compare(release.version, BuildConfig.VERSION_NAME) > 0;
+                runOnUiThread(() -> {
+                    if (!newer) {
+                        pendingApk = "";
+                        updateBanner.setVisibility(View.GONE);
+                        openUpdate.setText("Проверить обновление");
+                        if (manual) toast("Уже последняя версия");
+                        return;
+                    }
+                    pendingApk = release.apk == null ? "" : release.apk;
+                    pendingPage = release.page;
+                    String label = "Есть версия " + release.version + ". Нажми, чтобы обновить";
+                    updateBanner.setText(label);
+                    updateBanner.setVisibility(View.VISIBLE);
+                    openUpdate.setText("Обновить до " + release.version);
+                    if (manual) toast("Есть версия " + release.version);
+                });
+            } catch (Exception error) {
+                if (manual) runOnUiThread(() -> toast("Не удалось проверить обновление"));
+            }
+        }).start();
+    }
+
+    private void startUpdate() {
+        if (updating) return;
+        if (pendingApk.isEmpty()) {
+            openPage(pendingPage);
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
+            toast("Разреши установку из Rivers и нажми ещё раз");
+            startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName())));
+            return;
+        }
+        updating = true;
+        updateBanner.setText("Скачиваю обновление…");
+        openUpdate.setText("Скачиваю обновление…");
+        String url = pendingApk;
+        new Thread(() -> {
+            try {
+                File file = new File(getCacheDir(), "Rivers-update.apk");
+                download(url, file);
+                runOnUiThread(() -> {
+                    updating = false;
+                    updateBanner.setText("Нажми, чтобы установить");
+                    openUpdate.setText("Установить обновление");
+                    installApk(file);
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> {
+                    updating = false;
+                    toast("Не скачалось, открою страницу релиза");
+                    openPage(pendingPage);
+                });
+            }
+        }).start();
+    }
+
+    private void installApk(File file) {
+        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".files", file);
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.setDataAndType(uri, "application/vnd.android.package-archive");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+    }
+
+    private void openPage(String url) {
+        String target = url == null || url.isEmpty() ? "https://github.com/Flevgun/rivers/releases/latest" : url;
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(target)));
+        } catch (RuntimeException error) {
+            toast("Страница не открылась");
+        }
+    }
+
+    private static void download(String url, File file) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+        connection.setInstanceFollowRedirects(true);
+        connection.setConnectTimeout(15000);
+        connection.setReadTimeout(120000);
+        connection.setRequestProperty("User-Agent", "Rivers");
+        connection.connect();
+        int code = connection.getResponseCode();
+        if (code >= 400) throw new IllegalStateException("http " + code);
+        try (InputStream input = connection.getInputStream(); FileOutputStream output = new FileOutputStream(file)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) >= 0) output.write(buffer, 0, read);
+        } finally {
+            connection.disconnect();
+        }
+        if (file.length() < 100000) throw new IllegalStateException("short file");
     }
 
     private void toast(String text) {

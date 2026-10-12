@@ -10,8 +10,8 @@ android {
         applicationId = "app.rivers"
         minSdk = 29
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.0.6"
+        versionCode = 8
+        versionName = "1.5.3"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
@@ -46,8 +46,13 @@ android {
             signingConfig = signingConfigs.getByName("release")
         }
     }
+
+    buildFeatures {
+        buildConfig = true
+    }
 }
 
 dependencies {
+    implementation("androidx.core:core:1.15.0")
     implementation(files("libs/hev-socks5-tunnel.aar"))
 }

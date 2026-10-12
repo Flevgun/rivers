@@ -3,7 +3,7 @@ import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
 import { cn } from "@/lib/cn";
 import { useVpn } from "@/lib/vpn/store";
 
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.5.3";
 const CORE_VERSION = { xray: "Xray", "sing-box": "sing-box 1.12.12" } as const;
 
 function bytes(value: number) {
@@ -25,6 +25,8 @@ export function SettingsPanel() {
   const en = lang === "en";
   const device = useDevice();
   const [chart, setChart] = useState(false);
+  const [updateNote, setUpdateNote] = useState("");
+  const [updateUrl, setUpdateUrl] = useState("");
   useEffect(() => setChart(true), []);
 
   const week = useMemo(() => {
@@ -131,6 +133,37 @@ export function SettingsPanel() {
       <section className="rounded-card border border-line bg-surface p-4">
         <h2 className="text-sm font-semibold">{en ? "About" : "О приложении"}</h2>
         <Row label={en ? "Version" : "Версия"} value={APP_VERSION} />
+        <button
+          type="button"
+          onClick={() => {
+            const bridge = (window as unknown as {
+              rivers?: {
+                latestRelease?: () => Promise<{ newer?: boolean; latest?: string; url?: string }>;
+                openRelease?: (url: string) => Promise<boolean>;
+              };
+            }).rivers;
+            if (updateUrl) {
+              void bridge?.openRelease?.(updateUrl);
+              return;
+            }
+            setUpdateNote(en ? "Checking…" : "Проверяю…");
+            void bridge
+              ?.latestRelease?.()
+              .then((info) => {
+                if (!info?.newer || !info.url) {
+                  setUpdateNote(en ? "This is the latest version" : "Уже последняя версия");
+                  return;
+                }
+                setUpdateUrl(info.url);
+                setUpdateNote(en ? `Open ${info.latest}` : `Открыть ${info.latest}`);
+              })
+              .catch(() => setUpdateNote(en ? "Could not check" : "Не удалось проверить"));
+          }}
+          className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
+        >
+          <span className="text-sm text-muted">{en ? "Update" : "Обновление"}</span>
+          <span className="text-sm text-accent">{updateNote || (en ? "Check" : "Проверить")}</span>
+        </button>
         <Row label={en ? "Core" : "Ядро"} value={CORE_VERSION[core]} />
         <Row label={en ? "System" : "Система"} value={device.system} />
         <Row label={en ? "Architecture" : "Архитектура"} value={device.arch} />
