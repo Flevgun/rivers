@@ -358,7 +358,7 @@ function singboxDnsServer(tag: string, address: string, detour: string) {
   const prefixed = raw.match(/^(udp|tcp|tls|https|quic|h3|dhcp):\/\/(.+)$/i);
   const type = prefixed ? prefixed[1].toLowerCase() : "udp";
   const body = prefixed ? prefixed[2] : raw;
-  if (type === "dhcp") return { type, tag, detour };
+  if (type === "dhcp") return detour && detour !== "direct" ? { type, tag, detour } : { type, tag };
   const slash = body.indexOf("/");
   const route = slash >= 0 ? body.slice(slash) : "";
   const hostport = slash >= 0 ? body.slice(0, slash) : body;
@@ -380,7 +380,7 @@ function singboxDnsServer(tag: string, address: string, detour: string) {
     type,
     tag,
     server,
-    detour,
+    ...(detour && detour !== "direct" ? { detour } : {}),
     ...(serverPort ? { server_port: serverPort } : {}),
     ...(route && route !== "/" ? { path: route } : {}),
   };
