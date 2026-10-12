@@ -467,6 +467,11 @@ export function buildSingbox(input: {
       default_domain_resolver: "local",
       ...(enabled.some((entry) => processNames(entry.processes).length > 0) ? { find_process: true } : {}),
     },
+    experimental: {
+      clash_api: {
+        external_controller: "127.0.0.1:9097",
+      },
+    },
   };
 }
 
@@ -552,6 +557,14 @@ export function buildXray(input: {
 
   return {
     log: { loglevel: "info" },
+    stats: {},
+    policy: {
+      system: {
+        statsOutboundUplink: true,
+        statsOutboundDownlink: true,
+      },
+    },
+    api: { tag: "api", services: ["StatsService"] },
     dns: {
       queryStrategy: dns.strategy === "ipv4_only" ? "UseIPv4" : "UseIP",
       servers: [
@@ -564,6 +577,13 @@ export function buildXray(input: {
       ],
     },
     inbounds: [
+      {
+        tag: "api",
+        listen: "127.0.0.1",
+        port: 10085,
+        protocol: "dokodemo-door",
+        settings: { address: "127.0.0.1" },
+      },
       {
         tag: "socks",
         listen: "127.0.0.1",
@@ -585,6 +605,9 @@ export function buildXray(input: {
       { tag: "direct", protocol: "freedom", settings: { domainStrategy: "UseIPv4" } },
       { tag: "block", protocol: "blackhole", settings: {} },
     ],
-    routing: { domainStrategy: "AsIs", rules: routing },
+    routing: {
+      domainStrategy: "AsIs",
+      rules: [{ type: "field", inboundTag: ["api"], outboundTag: "api" }, ...routing],
+    },
   };
 }

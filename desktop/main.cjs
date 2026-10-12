@@ -114,9 +114,105 @@ function setSystemProxy(enable, serverValue) {
 }
 
 function stopCore() {
+  stopSpeed();
   if (coreProc && !coreProc.killed) coreProc.kill();
   coreProc = null;
   return setSystemProxy(false);
+}
+
+let speedStop = () => {};
+
+function sendSpeed(payload) {
+  if (!windowRef || windowRef.isDestroyed()) return;
+  windowRef.webContents.send("core:speed", payload);
+}
+
+function stopSpeed() {
+  speedStop();
+  speedStop = () => {};
+  sendSpeed(null);
+}
+
+function watchSpeed(core, exe) {
+  stopSpeed();
+  if (core === "sing-box") {
+    let stopped = false;
+    let req = null;
+    let timer = null;
+    const arm = () => {
+      if (stopped) return;
+      req = http.get("http://127.0.0.1:9097/traffic", (res) => {
+        let buf = "";
+        res.on("data", (chunk) => {
+          buf += chunk.toString();
+          const parts = buf.split("\n");
+          buf = parts.pop() ?? "";
+          for (const line of parts) {
+            const text = line.trim();
+            if (!text) continue;
+            try {
+              const data = JSON.parse(text);
+              sendSpeed({ down: Number(data.down) || 0, up: Number(data.up) || 0 });
+            } catch {
+              /* wait for a full line */
+            }
+          }
+        });
+        res.on("end", () => {
+          if (!stopped) timer = setTimeout(arm, 400);
+        });
+      });
+      req.on("error", () => {
+        if (!stopped) timer = setTimeout(arm, 400);
+      });
+    };
+    arm();
+    speedStop = () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      req?.destroy();
+    };
+    return;
+  }
+
+  let stopped = false;
+  let lastDown = 0;
+  let lastUp = 0;
+  let seen = false;
+  const timer = setInterval(() => {
+    const child = spawn(exe, ["api", "statsquery", "--server=127.0.0.1:10085"], { windowsHide: true });
+    let text = "";
+    child.stdout?.on("data", (chunk) => {
+      text += chunk.toString();
+    });
+    child.on("error", () => {});
+    child.on("exit", () => {
+      if (stopped) return;
+      try {
+        const data = JSON.parse(text);
+        let down = 0;
+        let up = 0;
+        for (const item of data.stat || []) {
+          const name = String(item.name || "");
+          const value = Number(item.value) || 0;
+          if (name === "outbound>>>proxy>>>traffic>>>downlink") down = value;
+          if (name === "outbound>>>proxy>>>traffic>>>uplink") up = value;
+        }
+        if (seen) {
+          sendSpeed({ down: Math.max(0, down - lastDown), up: Math.max(0, up - lastUp) });
+        }
+        lastDown = down;
+        lastUp = up;
+        seen = true;
+      } catch {
+        /* api not ready yet */
+      }
+    });
+  }, 1000);
+  speedStop = () => {
+    stopped = true;
+    clearInterval(timer);
+  };
 }
 
 function iconFile() {
@@ -295,10 +391,12 @@ ipcMain.handle("core:start", async (_event, payload) => {
     await stopCore();
     return { ok: false, error: alive.error };
   }
+  watchSpeed(core, exe);
   const running = coreProc;
   running.once("exit", (code) => {
     if (quitting || coreProc !== running) return;
     coreProc = null;
+    stopSpeed();
     emitLog(`ядро остановилось, код ${code}`);
     void setSystemProxy(false);
   });

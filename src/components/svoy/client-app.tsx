@@ -79,6 +79,7 @@ type RiversBridge = {
   latestRelease?: () => Promise<{ newer?: boolean; latest?: string; url?: string }>;
   openRelease?: (url: string) => Promise<boolean>;
   onLog?: (callback: (line: string) => void) => () => void;
+  onSpeed?: (callback: (payload: { down: number; up: number } | null) => void) => () => void;
 };
 
 function useClock(active: boolean, startedAt: number | null) {
@@ -99,6 +100,7 @@ export function ClientApp() {
   const [tab, setTab] = useState<Tab>("home");
   const [navOpen, setNavOpen] = useState(false);
   const [release, setRelease] = useState<{ latest: string; url: string } | null>(null);
+  const [speed, setSpeed] = useState<{ down: number; up: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [testing, setTesting] = useState(false);
   const [delay, setDelay] = useState<number | null>(null);
@@ -136,6 +138,10 @@ export function ClientApp() {
       })
       .catch(() => {});
   }, []);
+  useEffect(() => {
+    const bridge = (window as unknown as { rivers?: RiversBridge }).rivers;
+    return bridge?.onSpeed?.((payload) => setSpeed(payload)) ?? (() => {});
+  }, []);
   const lang = state.settings?.lang ?? "ru";
   const navText = NAV_TEXT[lang];
   useEffect(() => {
@@ -166,9 +172,9 @@ export function ClientApp() {
   }
 
   return (
-    <main className="min-h-dvh bg-bg text-fg">
-      <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col">
-        <header className="hidden items-center gap-3 border-b border-line px-4 py-3 md:flex">
+    <main className="min-h-dvh bg-bg text-fg md:h-dvh md:overflow-hidden">
+      <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col md:h-full md:min-h-0">
+        <header className="hidden shrink-0 items-center gap-3 border-b border-line px-4 py-3 md:flex">
           <button
             type="button"
             aria-label={lang === "en" ? "Menu" : "Меню"}
@@ -180,7 +186,7 @@ export function ClientApp() {
           <div className="text-sm font-semibold tracking-wide">Rivers</div>
         </header>
 
-        <section className="flex min-h-dvh flex-1 flex-col px-4 pt-5 pb-24 md:px-8 md:pb-8">
+        <section className="flex min-h-dvh flex-1 flex-col px-4 pt-5 pb-24 md:min-h-0 md:overflow-y-auto md:px-8 md:pt-3 md:pb-3">
           {release && (
             <button
               type="button"
@@ -245,6 +251,7 @@ export function ClientApp() {
               onMode={state.setMode}
               lang={lang}
               note={coreNote}
+              speed={state.connected ? speed : null}
               testing={testing}
               delay={delay}
               failed={failed}
@@ -411,6 +418,7 @@ function Home({
   onTest,
   lang,
   note,
+  speed,
 }: {
   server: VpnServer | null;
   connected: boolean;
@@ -426,14 +434,15 @@ function Home({
   onTest: () => void;
   lang: "ru" | "en";
   note?: string;
+  speed: { down: number; up: number } | null;
 }) {
   const en = lang === "en";
   const presets: Record<PresetId, string> = en
     ? { "all-proxy": "All via proxy", "ru-direct": "RU direct", games: "Games and RU", custom: "Custom" }
     : PRESET_LABEL;
   return (
-    <div className="flex flex-1 flex-col">
-      <div className="flex items-start justify-between">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-start justify-between">
         <button
           type="button"
           aria-label="Проверить сервер"
@@ -448,17 +457,17 @@ function Home({
         </button>
         <div className="text-right font-mono text-sm leading-5">
           <div>{delay != null ? `${delay} мс` : "—"}</div>
-          <div className="text-muted">↓ —</div>
-          <div className="text-muted">↑ —</div>
+          <div className="text-muted">↓ {rate(speed?.down)}</div>
+          <div className="text-muted">↑ {rate(speed?.up)}</div>
         </div>
       </div>
-      <div className="flex flex-1 flex-col items-center justify-center py-6">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-2">
         <button
           type="button"
           onClick={onToggle}
           aria-pressed={connected}
           className={cn(
-            "grid size-44 place-items-center rounded-full border-2 transition duration-200",
+            "grid size-36 shrink-0 place-items-center rounded-full border-2 transition duration-200 md:size-40",
             connected
               ? "border-accent bg-accent text-accent-ink orb-on"
               : "border-line bg-surface text-fg hover:border-muted",
@@ -466,7 +475,7 @@ function Home({
         >
           <Power size={52} strokeWidth={1.6} />
         </button>
-        <p className="mt-6 text-lg font-semibold">{connected ? (en ? "Profile on" : "Профиль включён") : en ? "Off" : "Выключен"}</p>
+        <p className="mt-4 text-lg font-semibold">{connected ? (en ? "Profile on" : "Профиль включён") : en ? "Off" : "Выключен"}</p>
         <p className="mt-1 max-w-md text-center text-sm text-muted">{server ? server.name : en ? "Add a server first" : "Сначала добавь сервер"}</p>
         {note ? (
           <p className={cn("mt-2 max-w-md text-center text-sm", connected ? "text-muted" : "text-danger")}>{note}</p>
@@ -507,7 +516,7 @@ function Home({
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap justify-center gap-2">
+      <div className="flex shrink-0 flex-wrap justify-center gap-2 pb-1">
         {(Object.keys(PRESET_LABEL) as PresetId[]).map((id) => (
           <button
             key={id}
@@ -524,6 +533,13 @@ function Home({
       </div>
     </div>
   );
+}
+
+function rate(value: number | undefined) {
+  if (value == null) return "—";
+  if (value < 1024) return `${Math.round(value)} Б/с`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(value < 10 * 1024 ? 1 : 0)} КБ/с`;
+  return `${(value / 1024 / 1024).toFixed(1)} МБ/с`;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

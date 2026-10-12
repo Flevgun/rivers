@@ -12,4 +12,9 @@ contextBridge.exposeInMainWorld("rivers", {
     ipcRenderer.on("core:log", listener);
     return () => ipcRenderer.removeListener("core:log", listener);
   },
+  onSpeed: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("core:speed", listener);
+    return () => ipcRenderer.removeListener("core:speed", listener);
+  },
 });
