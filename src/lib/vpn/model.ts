@@ -381,6 +381,9 @@ function singboxDnsServer(tag: string, address: string, detour: string) {
     tag,
     server,
     ...(detour && detour !== "direct" ? { detour } : {}),
+    ...((type === "https" || type === "tls" || type === "quic" || type === "h3") && server
+      ? { tls: { enabled: true, server_name: server } }
+      : {}),
     ...(serverPort ? { server_port: serverPort } : {}),
     ...(route && route !== "/" ? { path: route } : {}),
   };
@@ -419,7 +422,10 @@ export function buildSingbox(input: {
   const routeRules = [];
   if (tun.sniff) routeRules.push({ action: "sniff" });
   if (mode === "tun") routeRules.push({ protocol: "dns", action: "hijack-dns" });
-  routeRules.push({ ip_is_private: true, outbound: "direct" });
+  const serverCidr = server ? hostCidr(server.address) : "";
+  if (serverCidr) routeRules.push({ ip_cidr: [serverCidr], action: "route", outbound: "direct" });
+  else if (server?.address) routeRules.push({ domain: [server.address], action: "route", outbound: "direct" });
+  routeRules.push({ ip_is_private: true, action: "route", outbound: "direct" });
 
   const known = new Set(geos.filter((source) => bundledRuleFile(source.url)).map((source) => source.tag));
 
@@ -429,7 +435,7 @@ export function buildSingbox(input: {
     const domains = splitList(item.domains);
     const ips = splitList(item.ips);
     const processes = processNames(item.processes);
-    const base: Record<string, unknown> = { outbound: item.outbound };
+    const base: Record<string, unknown> = { action: "route", outbound: item.outbound };
     if (item.network) base.network = item.network;
     const ports = singboxPorts(item.ports);
     if (ports) Object.assign(base, ports);
@@ -481,10 +487,10 @@ export function buildSingbox(input: {
             tag: "tun-in",
             address: [tun.address],
             mtu: tun.mtu,
-            auto_route: tun.autoRoute,
-            strict_route: Boolean(tun.strictRoute),
-            stack: tun.stack || "system",
-            sniff: true,
+            auto_route: true,
+            strict_route: true,
+            stack: "mixed",
+            ...(serverCidr ? { route_exclude_address: [serverCidr] } : {}),
           },
     ],
     outbounds: [proxy, { type: "direct", tag: "direct" }, { type: "block", tag: "block" }],
@@ -506,6 +512,13 @@ export function buildSingbox(input: {
       },
     },
   };
+}
+
+function hostCidr(address: string) {
+  const host = address.trim().replace(/^\[|\]$/g, "");
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return `${host}/32`;
+  if (host.includes(":")) return `${host}/128`;
+  return "";
 }
 
 function bundledRuleFile(url: string) {
