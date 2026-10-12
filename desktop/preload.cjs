@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("rivers", {
   copyText: (text) => ipcRenderer.invoke("logs:copy", String(text ?? "")),
   latestRelease: () => ipcRenderer.invoke("app:latest"),
   openRelease: (url) => ipcRenderer.invoke("app:open", String(url ?? "")),
+  consumeResume: () => ipcRenderer.invoke("app:resume"),
   onLog: (callback) => {
     const listener = (_event, line) => callback(line);
     ipcRenderer.on("core:log", listener);

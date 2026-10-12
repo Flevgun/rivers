@@ -78,6 +78,7 @@ type RiversBridge = {
   setTray?: (on: boolean) => Promise<void>;
   latestRelease?: () => Promise<{ newer?: boolean; latest?: string; url?: string }>;
   openRelease?: (url: string) => Promise<boolean>;
+  consumeResume?: () => Promise<boolean>;
   onLog?: (callback: (line: string) => void) => () => void;
   onSpeed?: (callback: (payload: { down: number; up: number } | null) => void) => () => void;
 };
@@ -123,6 +124,34 @@ export function ClientApp() {
           const level = /FATAL|ERROR|panic|ядро остановилось/i.test(line) ? "error" : "info";
           useVpn.getState().pushLog(level, line);
         }) ?? (() => {});
+      if (await bridge?.consumeResume?.()) {
+        const current = useVpn.getState();
+        const server = current.servers.find((item) => item.id === current.activeId) ?? null;
+        if (server && bridge?.start) {
+          current.setMode("tun");
+          const profile =
+            current.overrides?.["sing-box"] ??
+            JSON.stringify(
+              buildSingbox({
+                server,
+                rules: current.rules,
+                tun: current.tun,
+                dns: current.dns,
+                geos: current.geos,
+                mode: "tun",
+              }),
+              null,
+              2,
+            );
+          current.pushLog("info", "запуск sing-box, режим tun");
+          const result = await bridge.start({ core: "sing-box", mode: "tun", config: profile });
+          if (!result.ok) current.pushLog("error", result.error || "ядро не запустилось");
+          else {
+            if (result.note) current.pushLog("info", result.note);
+            current.setConnected(true);
+          }
+        }
+      }
     })();
     return () => {
       alive = false;

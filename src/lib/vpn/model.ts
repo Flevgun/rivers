@@ -353,6 +353,39 @@ function domainPieces(domains: string[], known: Set<string>) {
   return rules;
 }
 
+function singboxDnsServer(tag: string, address: string, detour: string) {
+  const raw = address.trim();
+  const prefixed = raw.match(/^(udp|tcp|tls|https|quic|h3|dhcp):\/\/(.+)$/i);
+  const type = prefixed ? prefixed[1].toLowerCase() : "udp";
+  const body = prefixed ? prefixed[2] : raw;
+  if (type === "dhcp") return { type, tag, detour };
+  const slash = body.indexOf("/");
+  const route = slash >= 0 ? body.slice(slash) : "";
+  const hostport = slash >= 0 ? body.slice(0, slash) : body;
+  let server = hostport;
+  let serverPort = 0;
+  if (hostport.startsWith("[")) {
+    const end = hostport.indexOf("]");
+    server = hostport.slice(1, end);
+    if (hostport[end + 1] === ":") serverPort = Number(hostport.slice(end + 2)) || 0;
+  } else {
+    const colon = hostport.lastIndexOf(":");
+    const port = colon > 0 ? Number(hostport.slice(colon + 1)) : 0;
+    if (port) {
+      server = hostport.slice(0, colon);
+      serverPort = port;
+    }
+  }
+  return {
+    type,
+    tag,
+    server,
+    detour,
+    ...(serverPort ? { server_port: serverPort } : {}),
+    ...(route && route !== "/" ? { path: route } : {}),
+  };
+}
+
 export function buildSingbox(input: {
   server: Server | null;
   rules: RouteRule[];
@@ -424,8 +457,8 @@ export function buildSingbox(input: {
     log: { level: "info" },
     dns: {
       servers: [
-        { tag: "local", address: dns.local, detour: "direct" },
-        { tag: "remote", address: dns.remote, detour: "proxy" },
+        singboxDnsServer("local", dns.local, "direct"),
+        singboxDnsServer("remote", dns.remote, "proxy"),
       ],
       rules: [
         ...(known.has("geosite-ru") ? [{ rule_set: ["geosite-ru"], server: "local" }] : []),

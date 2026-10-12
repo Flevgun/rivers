@@ -1,6 +1,6 @@
 const { app, BrowserWindow, shell, ipcMain, session, Tray, Menu, nativeImage, clipboard } = require("electron");
 const { spawn } = require("node:child_process");
-const { existsSync, mkdirSync, writeFileSync } = require("node:fs");
+const { existsSync, mkdirSync, unlinkSync, writeFileSync } = require("node:fs");
 const http = require("node:http");
 const https = require("node:https");
 const net = require("node:net");
@@ -215,6 +215,15 @@ function watchSpeed(core, exe) {
   };
 }
 
+function plainError(text) {
+  const clean = String(text || "")
+    .replace(/\u001b\[[0-9;]*m/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (/Access is denied/i.test(clean)) return "Windows не дала создать TUN. Нужен запуск от имени администратора.";
+  return clean || "ядро не запустилось";
+}
+
 function iconFile() {
   const ico = app.isPackaged ? path.join(process.resourcesPath, "icon.ico") : path.join(__dirname, "icon.ico");
   const png = app.isPackaged ? path.join(process.resourcesPath, "icon.png") : path.join(__dirname, "icon.png");
@@ -374,9 +383,66 @@ function ensureTray() {
   tray.on("double-click", showMain);
 }
 
+function isAdmin() {
+  if (process.platform !== "win32") return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const child = spawn(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        "([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)",
+      ],
+      { windowsHide: true },
+    );
+    let text = "";
+    child.stdout?.on("data", (chunk) => {
+      text += chunk.toString();
+    });
+    child.on("exit", () => resolve(text.trim() === "True"));
+    child.on("error", () => resolve(false));
+  });
+}
+
+function relaunchElevated() {
+  app.releaseSingleInstanceLock();
+  const exe = process.execPath.replace(/'/g, "''");
+  return new Promise((resolve) => {
+    const child = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-Command", `Start-Process -FilePath '${exe}' -Verb RunAs`],
+      { windowsHide: true },
+    );
+    child.on("exit", (code) => resolve(code === 0));
+    child.on("error", () => resolve(false));
+  });
+}
+
+ipcMain.handle("app:resume", () => {
+  const file = path.join(app.getPath("userData"), "resume-tun");
+  if (!existsSync(file)) return false;
+  unlinkSync(file);
+  return true;
+});
+
 ipcMain.handle("core:start", async (_event, payload) => {
   await stopCore();
   const core = payload?.core === "sing-box" ? "sing-box" : "xray";
+  const mode = payload?.mode === "system" ? "system" : "tun";
+  if (core === "sing-box" && mode === "tun" && process.platform === "win32" && !(await isAdmin())) {
+    const dir = app.getPath("userData");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "resume-tun"), "1");
+    const elevated = await relaunchElevated();
+    if (!elevated) {
+      unlinkSync(path.join(dir, "resume-tun"));
+      app.requestSingleInstanceLock();
+      return { ok: false, error: "Запрос прав отменён. Без них TUN не создаётся." };
+    }
+    quitting = true;
+    app.quit();
+    return { ok: false, error: "Нужны права администратора. Подтверди запрос Windows." };
+  }
   const exe = path.join(binDir(), core === "sing-box" ? "sing-box.exe" : "xray.exe");
   if (!existsSync(exe)) return { ok: false, error: `В сборке нет ${path.basename(exe)}` };
   const dir = app.getPath("userData");
@@ -389,7 +455,7 @@ ipcMain.handle("core:start", async (_event, payload) => {
   const alive = await waitAlive(coreProc);
   if (!alive.ok) {
     await stopCore();
-    return { ok: false, error: alive.error };
+    return { ok: false, error: plainError(alive.error) };
   }
   watchSpeed(core, exe);
   const running = coreProc;
@@ -400,7 +466,6 @@ ipcMain.handle("core:start", async (_event, payload) => {
     emitLog(`ядро остановилось, код ${code}`);
     void setSystemProxy(false);
   });
-  const mode = payload?.mode === "system" ? "system" : "tun";
   if (core === "sing-box" && mode === "tun") {
     return {
       ok: true,
