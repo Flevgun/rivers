@@ -46,13 +46,17 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 public class MainActivity extends android.app.Activity {
@@ -105,12 +109,15 @@ public class MainActivity extends android.app.Activity {
     private String pendingApk = "";
     private String pendingPage = "https://github.com/Flevgun/rivers/releases/latest";
     private final Set<String> folded = new HashSet<>();
+    private final Map<String, String> pings = new HashMap<>();
 
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
             boolean on = RiversVpnService.running;
             status.setText(on ? "Профиль включён" : RiversVpnService.status);
+            if (on && RiversVpnService.speedText != null && !RiversVpnService.speedText.isEmpty()) homeHint.setText(RiversVpnService.speedText);
+            else if (!on) homeHint.setText("Рунет напрямую, остальное через VPN");
             paintChrome();
             if (pageLogs.getVisibility() == View.VISIBLE) logs.setText(LogBuffer.text());
             handler.postDelayed(this, 700);
@@ -225,6 +232,7 @@ public class MainActivity extends android.app.Activity {
     protected void onResume() {
         super.onResume();
         handler.post(tick);
+        if (updateBanner != null && updateBanner.getVisibility() == View.VISIBLE) checkUpdate(false);
     }
 
     @Override
@@ -568,6 +576,9 @@ public class MainActivity extends android.app.Activity {
         titles.addView(caption(countLabel(inside.size()), palette.muted));
         header.addView(titles);
         if (refresh != null) {
+            TextView pingView = action("Пинг", palette.accent);
+            pingView.setOnClickListener(view -> pingServers(inside));
+            header.addView(pingView);
             TextView refreshView = action("Обновить", palette.muted);
             refreshView.setOnClickListener(view -> refresh.run());
             header.addView(refreshView);
@@ -635,6 +646,8 @@ public class MainActivity extends android.app.Activity {
         text.addView(caption(server.label(), palette.fg));
         text.addView(caption(server.address + ":" + server.port, palette.muted));
         row.addView(text);
+        String delay = pings.get(server.id);
+        if (delay != null) row.addView(action(delay, palette.accent));
         row.setOnClickListener(view -> {
             Store.select(this, server.id);
             renderServers();
@@ -699,6 +712,36 @@ public class MainActivity extends android.app.Activity {
 
     private int pad() {
         return (int) Palette.dp(this, 14);
+    }
+
+    private void pingServers(List<Server> servers) {
+        if (servers.isEmpty()) {
+            toast("В подписке нет серверов");
+            return;
+        }
+        List<Server> copy = new ArrayList<>(servers);
+        for (Server server : copy) pings.put(server.id, "…");
+        renderServers();
+        toast("Проверяю серверы");
+        new Thread(() -> {
+            for (Server server : copy) {
+                String result = tcpPing(server.address, server.port);
+                runOnUiThread(() -> {
+                    pings.put(server.id, result);
+                    renderServers();
+                });
+            }
+        }).start();
+    }
+
+    private static String tcpPing(String host, int port) {
+        long started = System.currentTimeMillis();
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(host, port), 5000);
+            return (System.currentTimeMillis() - started) + " мс";
+        } catch (Exception ignored) {
+            return "нет";
+        }
     }
 
     private void reloadServers() {

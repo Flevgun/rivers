@@ -14,12 +14,14 @@ import android.os.ParcelFileDescriptor;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Set;
 
 import hev.htproxy.TProxyService;
@@ -27,18 +29,25 @@ import hev.htproxy.TProxyService;
 public class RiversVpnService extends VpnService {
     public static final String ACTION_START = "app.rivers.START";
     public static final String ACTION_STOP = "app.rivers.STOP";
+    public static final String ACTION_PAUSE = "app.rivers.PAUSE";
     public static volatile boolean running = false;
     public static volatile String status = "Выключен";
+    public static volatile String speedText = "";
 
     private final Object lock = new Object();
     private Process core;
     private ParcelFileDescriptor tun;
     private Thread pump;
+    private volatile boolean speedStop = true;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_PAUSE.equals(intent.getAction())) {
+            shutdown("На паузе", true);
+            return START_NOT_STICKY;
+        }
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
-            shutdown("Выключен");
+            shutdown("Выключен", false);
             return START_NOT_STICKY;
         }
         promote("Подключение");
@@ -48,12 +57,12 @@ public class RiversVpnService extends VpnService {
 
     @Override
     public void onRevoke() {
-        shutdown("VPN отозван");
+        shutdown("VPN отозван", false);
     }
 
     @Override
     public void onDestroy() {
-        shutdown("Выключен");
+        shutdown("Выключен", false);
         super.onDestroy();
     }
 
@@ -89,9 +98,10 @@ public class RiversVpnService extends VpnService {
                 status = "Включен";
                 LogBuffer.add("Rivers включён. Рунет напрямую, остальное через VPN");
                 promote("Включен");
+                startSpeed();
             } catch (Exception error) {
                 LogBuffer.add(error.getMessage() == null ? "не запустилось" : error.getMessage());
-                shutdown(error.getMessage() == null ? "Ошибка" : error.getMessage());
+                shutdown(error.getMessage() == null ? "Ошибка" : error.getMessage(), false);
             }
         }
     }
@@ -167,9 +177,11 @@ public class RiversVpnService extends VpnService {
         }
     }
 
-    private void shutdown(String next) {
+    private void shutdown(String next, boolean paused) {
         synchronized (lock) {
             running = false;
+            speedStop = true;
+            speedText = "";
             status = next;
             try {
                 if (TProxyService.TProxyIsRunning()) TProxyService.TProxyStopService();
@@ -184,7 +196,8 @@ public class RiversVpnService extends VpnService {
             }
             stopCore();
             stopForeground(STOP_FOREGROUND_REMOVE);
-            stopSelf();
+            if (paused) showPaused();
+            else stopSelf();
         }
     }
 
@@ -192,6 +205,60 @@ public class RiversVpnService extends VpnService {
         if (core == null) return;
         core.destroy();
         core = null;
+    }
+
+    private void startSpeed() {
+        speedStop = false;
+        long[] base = tunBytes();
+        new Thread(() -> {
+            long rx = base[0];
+            long tx = base[1];
+            while (!speedStop && running) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException interrupted) {
+                    return;
+                }
+                long[] now = tunBytes();
+                long down = Math.max(0, now[0] - rx);
+                long up = Math.max(0, now[1] - tx);
+                rx = now[0];
+                tx = now[1];
+                speedText = "↓ " + rate(down) + "   ↑ " + rate(up);
+                if (running && !speedStop) promote(speedText);
+            }
+        }, "rivers-speed").start();
+    }
+
+    private static long[] tunBytes() {
+        try (BufferedReader reader = new BufferedReader(new FileReader("/proc/net/dev"))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (!trimmed.startsWith("tun")) continue;
+                String[] parts = trimmed.split(":");
+                if (parts.length < 2) continue;
+                String[] cols = parts[1].trim().split("\\s+");
+                if (cols.length < 9) continue;
+                return new long[] { Long.parseLong(cols[0]), Long.parseLong(cols[8]) };
+            }
+        } catch (Exception ignored) {
+        }
+        return new long[] { 0, 0 };
+    }
+
+    private static String rate(long bytes) {
+        if (bytes < 1024) return bytes + " Б/с";
+        if (bytes < 1024 * 1024) return String.format(Locale.US, "%.1f КБ/с", bytes / 1024.0);
+        return String.format(Locale.US, "%.1f МБ/с", bytes / 1024.0 / 1024.0);
+    }
+
+    private void showPaused() {
+        ensureChannel();
+        Intent open = new Intent(this, MainActivity.class);
+        PendingIntent content = PendingIntent.getActivity(this, 3, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        manager.notify(1, baseNotification("На паузе", content).addAction(action("Включить", ACTION_START, 2)).build());
     }
 
     private void promote(String text) {
@@ -204,12 +271,13 @@ public class RiversVpnService extends VpnService {
     }
 
     private Notification notification(String text) {
-        if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel channel = new NotificationChannel("vpn", "Rivers", NotificationManager.IMPORTANCE_LOW);
-            getSystemService(NotificationManager.class).createNotificationChannel(channel);
-        }
-        Intent stop = new Intent(this, RiversVpnService.class).setAction(ACTION_STOP);
-        PendingIntent pending = PendingIntent.getService(this, 1, stop, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        ensureChannel();
+        Intent open = new Intent(this, MainActivity.class);
+        PendingIntent content = PendingIntent.getActivity(this, 3, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        return baseNotification(text, content).addAction(action("Пауза", ACTION_PAUSE, 1)).build();
+    }
+
+    private Notification.Builder baseNotification(String text, PendingIntent content) {
         Notification.Builder builder = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(this, "vpn")
                 : new Notification.Builder(this);
@@ -217,9 +285,20 @@ public class RiversVpnService extends VpnService {
                 .setSmallIcon(R.drawable.ic_stat)
                 .setContentTitle("Rivers")
                 .setContentText(text)
-                .setOngoing(true)
-                .addAction(new Notification.Action.Builder(null, "Выключить", pending).build())
-                .build();
+                .setContentIntent(content)
+                .setOngoing(true);
+    }
+
+    private Notification.Action action(String title, String command, int request) {
+        Intent intent = new Intent(this, RiversVpnService.class).setAction(command);
+        PendingIntent pending = PendingIntent.getService(this, request, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        return new Notification.Action.Builder(null, title, pending).build();
+    }
+
+    private void ensureChannel() {
+        if (Build.VERSION.SDK_INT < 26) return;
+        NotificationChannel channel = new NotificationChannel("vpn", "Rivers", NotificationManager.IMPORTANCE_LOW);
+        getSystemService(NotificationManager.class).createNotificationChannel(channel);
     }
 
     private void copyAsset(File dir, String name) throws IOException {

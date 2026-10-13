@@ -160,12 +160,23 @@ export function ClientApp() {
   }, []);
   useEffect(() => {
     const bridge = (window as unknown as { rivers?: RiversBridge }).rivers;
-    void bridge
-      ?.latestRelease?.()
-      .then((info) => {
-        if (info?.newer && info.latest && info.url) setRelease({ latest: info.latest, url: info.url });
-      })
-      .catch(() => {});
+    if (!bridge?.latestRelease) return;
+    let alive = true;
+    void (async () => {
+      for (let attempt = 0; attempt < 3 && alive; attempt += 1) {
+        try {
+          const info = await bridge.latestRelease?.();
+          if (!alive) return;
+          if (info?.newer && info.latest && info.url) setRelease({ latest: info.latest, url: info.url });
+          return;
+        } catch {
+          await new Promise((resolve) => window.setTimeout(resolve, 4000));
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
   useEffect(() => {
     const bridge = (window as unknown as { rivers?: RiversBridge }).rivers;

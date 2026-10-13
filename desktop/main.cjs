@@ -263,6 +263,14 @@ function waitAlive(child) {
 
 ipcMain.handle("core:stop", () => stopCore());
 
+function currentVersion() {
+  try {
+    return require("./package.json").version || app.getVersion();
+  } catch (error) {
+    return app.getVersion();
+  }
+}
+
 function compareVersions(left, right) {
   const a = String(left).replace(/^v/, "").split(".").map((part) => parseInt(part, 10) || 0);
   const b = String(right).replace(/^v/, "").split(".").map((part) => parseInt(part, 10) || 0);
@@ -288,6 +296,10 @@ function getJson(url) {
         const chunks = [];
         response.on("data", (chunk) => chunks.push(chunk));
         response.on("end", () => {
+          if (response.statusCode !== 200) {
+            reject(new Error("http " + response.statusCode));
+            return;
+          }
           try {
             resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
           } catch (error) {
@@ -304,7 +316,7 @@ function getJson(url) {
 ipcMain.handle("app:latest", async () => {
   const data = await getJson("https://api.github.com/repos/Flevgun/rivers/releases/latest");
   const latest = String(data.tag_name || "").replace(/^v/, "");
-  const current = app.getVersion();
+  const current = currentVersion();
   return {
     current,
     latest,
