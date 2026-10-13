@@ -80,6 +80,10 @@ public final class VlessParser {
     }
 
     private static String urlDecode(String value) {
-        return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        try {
+            return URLDecoder.decode(value, "UTF-8");
+        } catch (Exception ignored) {
+            return value;
+        }
     }
 }

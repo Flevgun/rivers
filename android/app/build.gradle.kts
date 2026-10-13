@@ -10,8 +10,8 @@ android {
         applicationId = "app.rivers"
         minSdk = 29
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.5.3"
+        versionCode = 9
+        versionName = "1.5.9"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }

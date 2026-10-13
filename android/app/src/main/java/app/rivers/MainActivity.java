@@ -425,18 +425,34 @@ public class MainActivity extends android.app.Activity {
         input.setMinLines(3);
         input.setTextColor(0xFFE7EFE9);
         input.setBackgroundColor(0xFF101614);
-        input.setPadding(32, 24, 32, 24);
+        int pad = (int) Palette.dp(this, 12);
+        input.setPadding(pad, pad, pad, pad);
+        FrameLayout wrap = new FrameLayout(this);
+        int margin = (int) Palette.dp(this, 16);
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(margin, margin, margin, margin);
+        wrap.addView(input, params);
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(title)
-                .setView(input)
-                .setPositiveButton("Добавить", (d, which) -> onOk.accept(input.getText().toString().trim()))
+                .setView(wrap)
+                .setPositiveButton("Добавить", (d, which) -> {
+                    try {
+                        onOk.accept(input.getText().toString().trim());
+                    } catch (Throwable error) {
+                        toast(error.getMessage() == null ? "Не получилось добавить" : error.getMessage());
+                    }
+                })
                 .setNegativeButton("Отмена", null)
                 .create();
+        dialog.setOnShowListener(shown -> {
+            Palette palette = Palette.current(this);
+            if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(palette.surface));
+            Button ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            Button cancel = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+            if (ok != null) ok.setTextColor(palette.accent);
+            if (cancel != null) cancel.setTextColor(palette.muted);
+        });
         dialog.show();
-        Palette palette = Palette.current(this);
-        if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(palette.surface));
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(palette.accent);
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(palette.muted);
     }
 
     private void addText(String text) {
@@ -475,7 +491,7 @@ public class MainActivity extends android.app.Activity {
                     showTab(1);
                     toast("Серверов: " + parsed.size());
                 });
-            } catch (Exception error) {
+            } catch (Throwable error) {
                 runOnUiThread(() -> {
                     spinning = false;
                     toast(error.getMessage() == null ? "Подписка не открылась" : error.getMessage());
