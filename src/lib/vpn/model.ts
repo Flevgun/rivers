@@ -421,7 +421,10 @@ export function buildSingbox(input: {
 
   const routeRules = [];
   if (tun.sniff) routeRules.push({ action: "sniff" });
-  if (mode === "tun") routeRules.push({ protocol: "dns", action: "hijack-dns" });
+  if (mode === "tun") {
+    routeRules.push({ network: "udp", port: [53], action: "hijack-dns" });
+    routeRules.push({ network: "tcp", port: [53], action: "reject" });
+  }
   const serverCidr = server ? hostCidr(server.address) : "";
   if (serverCidr) routeRules.push({ ip_cidr: [serverCidr], action: "route", outbound: "direct" });
   else if (server?.address) routeRules.push({ domain: [server.address], action: "route", outbound: "direct" });
@@ -490,6 +493,8 @@ export function buildSingbox(input: {
             auto_route: true,
             strict_route: true,
             stack: "mixed",
+            endpoint_independent_nat: false,
+            udp_timeout: "5m",
             ...(serverCidr ? { route_exclude_address: [serverCidr] } : {}),
           },
     ],
