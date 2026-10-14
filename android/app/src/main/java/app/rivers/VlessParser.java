@@ -65,6 +65,15 @@ public final class VlessParser {
             server.fp = fp.isEmpty() ? "firefox" : fp;
             server.pbk = first(queryValue(query, "pbk"), queryValue(query, "password"), queryValue(query, "publicKey"));
             server.sid = first(queryValue(query, "sid"), queryValue(query, "shortId"));
+            server.security = queryValue(query, "security");
+            String type = queryValue(query, "type");
+            server.network = type.isEmpty() ? "tcp" : type;
+            server.host = queryValue(query, "host");
+            server.path = queryValue(query, "path");
+            server.serviceName = queryValue(query, "serviceName");
+            server.mode = queryValue(query, "mode");
+            server.alpn = queryValue(query, "alpn");
+            server.spiderX = first(queryValue(query, "spx"), queryValue(query, "spiderX"));
             return server;
         } catch (RuntimeException ignored) {
             return null;

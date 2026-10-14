@@ -12,6 +12,14 @@ export type Server = {
   pbk: string;
   sid: string;
   subId?: string;
+  security?: string;
+  network?: string;
+  host?: string;
+  path?: string;
+  serviceName?: string;
+  mode?: string;
+  alpn?: string;
+  spiderX?: string;
 };
 
 export type Subscription = {
@@ -244,7 +252,15 @@ export function parseVless(raw: string): Server | null {
       sni: query.get("sni") || query.get("serverName") || "",
       fp: query.get("fp") || "firefox",
       pbk: query.get("pbk") || query.get("password") || query.get("publicKey") || "",
-      sid: query.get("sid") || "",
+      sid: query.get("sid") || query.get("shortId") || "",
+      security: query.get("security") || "",
+      network: query.get("type") || "tcp",
+      host: query.get("host") || "",
+      path: query.get("path") || "",
+      serviceName: query.get("serviceName") || "",
+      mode: query.get("mode") || "",
+      alpn: query.get("alpn") || "",
+      spiderX: query.get("spx") || query.get("spiderX") || "",
     };
   } catch {
     return null;
@@ -405,17 +421,20 @@ export function buildSingbox(input: {
         server: server.address,
         server_port: server.port,
         uuid: server.uuid,
-        flow: server.flow || undefined,
-        tls: {
-          enabled: true,
-          server_name: server.sni,
-          utls: { enabled: true, fingerprint: server.fp || "firefox" },
-          reality: {
-            enabled: true,
-            public_key: server.pbk,
-            short_id: server.sid,
-          },
-        },
+        flow: linkSecurity(server) === "none" ? undefined : server.flow || undefined,
+        tls: linkSecurity(server) === "none"
+          ? undefined
+          : {
+              enabled: true,
+              server_name: server.sni || server.address,
+              utls: { enabled: true, fingerprint: server.fp || "firefox" },
+              reality:
+                linkSecurity(server) === "reality"
+                  ? { enabled: true, public_key: server.pbk, short_id: server.sid }
+                  : undefined,
+              alpn: alpnList(server.alpn),
+            },
+        transport: singboxTransport(server),
       }
     : { type: "direct", tag: "proxy" };
 
@@ -537,6 +556,70 @@ function bundledRuleFile(url: string) {
   return bundled.has(file) ? file : "";
 }
 
+function linkSecurity(server: Server) {
+  const raw = (server.security || "").trim().toLowerCase();
+  if (raw === "none") return "none";
+  if (raw === "reality" && server.pbk) return "reality";
+  if (raw === "tls" || raw === "xtls") return "tls";
+  if (server.pbk) return "reality";
+  if (server.sni) return "tls";
+  return "none";
+}
+
+function linkNetwork(server: Server) {
+  const raw = (server.network || "tcp").trim().toLowerCase();
+  if (raw === "ws" || raw === "grpc") return raw;
+  if (raw === "xhttp" || raw === "splithttp") return "xhttp";
+  if (raw === "http" || raw === "h2") return "http";
+  return "tcp";
+}
+
+function alpnList(value?: string) {
+  const items = (value || "").split(",").map((item) => item.trim()).filter(Boolean);
+  return items.length ? items : undefined;
+}
+
+function singboxTransport(server: Server) {
+  const network = linkNetwork(server);
+  if (network === "ws") {
+    return { type: "ws", path: server.path || "/", headers: server.host ? { Host: server.host } : undefined };
+  }
+  if (network === "grpc") return { type: "grpc", service_name: server.serviceName || "" };
+  return undefined;
+}
+
+function xrayStream(server: Server) {
+  const security = linkSecurity(server);
+  const network = linkNetwork(server);
+  const stream: Record<string, unknown> = { network, security };
+  if (security === "reality") {
+    stream.realitySettings = {
+      serverName: server.sni || server.address,
+      fingerprint: server.fp || "firefox",
+      password: server.pbk,
+      publicKey: server.pbk,
+      shortId: server.sid,
+      spiderX: server.spiderX || "/",
+    };
+  } else if (security === "tls") {
+    stream.tlsSettings = {
+      serverName: server.sni || server.address,
+      fingerprint: server.fp || "firefox",
+      alpn: alpnList(server.alpn),
+    };
+  }
+  if (network === "ws") {
+    stream.wsSettings = { path: server.path || "/", headers: server.host ? { Host: server.host } : undefined };
+  } else if (network === "grpc") {
+    stream.grpcSettings = { serviceName: server.serviceName || "" };
+  } else if (network === "xhttp") {
+    stream.xhttpSettings = { path: server.path || "/", host: server.host || undefined, mode: server.mode || undefined };
+  } else if (network === "http") {
+    stream.httpSettings = { path: server.path || "/", host: server.host ? [server.host] : undefined };
+  }
+  return stream;
+}
+
 function xrayDomain(item: string) {
   if (item === "geosite:ru" || item === "geosite:category-ru") return "geosite:category-ru";
   if (/^(keyword:|regexp:|full:|geosite:|geoip:)/.test(item)) return item;
@@ -564,24 +647,13 @@ export function buildXray(input: {
                 {
                   id: server.uuid,
                   encryption: "none",
-                  flow: server.flow || undefined,
+                  flow: linkSecurity(server) === "none" ? undefined : server.flow || undefined,
                 },
               ],
             },
           ],
         },
-        streamSettings: {
-          network: "tcp",
-          security: "reality",
-          realitySettings: {
-            serverName: server.sni,
-            fingerprint: server.fp || "firefox",
-            password: server.pbk,
-            publicKey: server.pbk,
-            shortId: server.sid,
-            spiderX: "/",
-          },
-        },
+        streamSettings: xrayStream(server),
       }
     : { tag: "proxy", protocol: "freedom", settings: { domainStrategy: "UseIPv4" } };
 
