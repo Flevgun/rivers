@@ -11,6 +11,7 @@ import android.graphics.drawable.Icon;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
+import android.system.OsConstants;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -144,11 +145,13 @@ public class RiversVpnService extends VpnService {
     private void openTun() throws PackageManager.NameNotFoundException {
         Builder builder = new Builder();
         builder.setSession("Rivers");
-        builder.setMtu(1400);
-        builder.setBlocking(false);
+        builder.setMtu(1500);
+        builder.setBlocking(true);
         builder.addAddress("172.19.0.1", 30);
         builder.addRoute("0.0.0.0", 0);
         builder.addDnsServer("172.19.0.2");
+        builder.allowFamily(OsConstants.AF_INET);
+        if (Build.VERSION.SDK_INT >= 29) builder.setMetered(false);
         applyApps(builder);
         tun = builder.establish();
         if (tun == null) throw new IllegalStateException("Система не дала VPN");
@@ -376,13 +379,11 @@ public class RiversVpnService extends VpnService {
 
     private static String tunnelYaml() {
         return "misc:\n"
-                + "  task-stack-size: 24576\n"
-                + "  tcp-buffer-size: 4096\n"
-                + "  connect-timeout: 5000\n"
-                + "  read-write-timeout: 60000\n"
+                + "  tcp-read-write-timeout: 300000\n"
+                + "  udp-read-write-timeout: 60000\n"
                 + "  log-level: warn\n"
                 + "tunnel:\n"
-                + "  mtu: 1400\n"
+                + "  mtu: 1500\n"
                 + "socks5:\n"
                 + "  port: " + ConfigBuilder.SOCKS_PORT + "\n"
                 + "  address: 127.0.0.1\n"
@@ -390,8 +391,8 @@ public class RiversVpnService extends VpnService {
                 + "mapdns:\n"
                 + "  address: 172.19.0.2\n"
                 + "  port: 53\n"
-                + "  network: 240.0.0.0\n"
-                + "  netmask: 240.0.0.0\n"
+                + "  network: 198.18.0.0\n"
+                + "  netmask: 255.254.0.0\n"
                 + "  cache-size: 10000\n";
     }
 }

@@ -2,7 +2,7 @@
 set -eu
 root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 tmp=$(mktemp -d)
-base=https://github.com/XTLS/Xray-core/releases/download/v26.3.27
+base=https://github.com/XTLS/Xray-core/releases/download/v26.9.30
 mkdir -p "$root/app/libs" "$root/app/src/main/assets" \
   "$root/app/src/main/jniLibs/arm64-v8a" \
   "$root/app/src/main/jniLibs/x86_64"

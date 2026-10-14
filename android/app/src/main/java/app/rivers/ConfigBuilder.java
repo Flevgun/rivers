@@ -34,7 +34,8 @@ public final class ConfigBuilder {
                 .put("settings", new JSONObject().put("udp", true))
                 .put("sniffing", new JSONObject()
                         .put("enabled", true)
-                        .put("destOverride", new JSONArray().put("http").put("tls").put("quic")))));
+                        .put("routeOnly", true)
+                        .put("destOverride", new JSONArray().put("http").put("tls")))));
 
         String security = securityOf(server);
         JSONObject proxy = new JSONObject()
@@ -110,6 +111,7 @@ public final class ConfigBuilder {
             if (!blank(server.host)) http.put("host", new JSONArray().put(server.host));
             stream.put("httpSettings", http);
         }
+        stream.put("sockopt", new JSONObject().put("domainStrategy", "UseIPv4"));
         return stream;
     }
 
