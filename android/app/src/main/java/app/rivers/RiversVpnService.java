@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
+import android.graphics.drawable.Icon;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
@@ -23,6 +24,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import hev.htproxy.TProxyService;
 
@@ -31,78 +33,111 @@ public class RiversVpnService extends VpnService {
     public static final String ACTION_STOP = "app.rivers.STOP";
     public static final String ACTION_PAUSE = "app.rivers.PAUSE";
     public static volatile boolean running = false;
+    public static volatile boolean starting = false;
     public static volatile String status = "Выключен";
     public static volatile String speedText = "";
 
     private final Object lock = new Object();
+    private final AtomicInteger generation = new AtomicInteger();
     private Process core;
     private ParcelFileDescriptor tun;
     private Thread pump;
     private volatile boolean speedStop = true;
+    private int commandId;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && ACTION_PAUSE.equals(intent.getAction())) {
-            shutdown("На паузе", true);
+        commandId = startId;
+        if (intent != null && (ACTION_PAUSE.equals(intent.getAction()) || ACTION_STOP.equals(intent.getAction()))) {
+            boolean pause = ACTION_PAUSE.equals(intent.getAction());
+            generation.incrementAndGet();
+            shutdown(pause ? "На паузе" : "Выключен", pause, startId);
             return START_NOT_STICKY;
         }
-        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
-            shutdown("Выключен", false);
-            return START_NOT_STICKY;
+        if (starting || running) return START_NOT_STICKY;
+        int gen = generation.incrementAndGet();
+        starting = true;
+        status = "Подключение";
+        try {
+            promote("Подключение");
+        } catch (Throwable error) {
+            LogBuffer.add(error.getMessage() == null ? "уведомление не создалось" : error.getMessage());
         }
-        promote("Подключение");
-        new Thread(this::connect, "rivers-connect").start();
+        new Thread(() -> connect(gen), "rivers-connect").start();
         return START_NOT_STICKY;
     }
 
     @Override
     public void onRevoke() {
-        shutdown("VPN отозван", false);
+        generation.incrementAndGet();
+        shutdown("VPN отозван", false, commandId);
     }
 
     @Override
     public void onDestroy() {
-        shutdown("Выключен", false);
+        generation.incrementAndGet();
+        speedStop = true;
+        running = false;
+        starting = false;
+        releaseTunnel();
         super.onDestroy();
     }
 
-    private void connect() {
-        synchronized (lock) {
-            if (running) return;
-            try {
-                Server server = Store.selected(this);
-                if (server == null) throw new IOException("Сначала добавь сервер");
-                File dir = getFilesDir();
-                copyAsset(dir, "geoip.dat");
-                copyAsset(dir, "geosite.dat");
-                File config = new File(dir, "config.json");
-                write(config, ConfigBuilder.xray(server));
-                File binary = new File(getApplicationInfo().nativeLibraryDir, "libxray.so");
-                if (!binary.exists()) throw new IOException("В сборке нет ядра для этого телефона");
+    private void connect(int gen) {
+        int origin = commandId;
+        try {
+            if (gen != generation.get()) return;
+            Server server = Store.selected(this);
+            if (server == null) throw new IOException("Сначала добавь сервер");
+            File dir = getFilesDir();
+            copyAsset(dir, "geoip.dat");
+            copyAsset(dir, "geosite.dat");
+            File config = new File(dir, "config.json");
+            write(config, ConfigBuilder.xray(server));
+            File binary = new File(getApplicationInfo().nativeLibraryDir, "libxray.so");
+            if (!binary.exists()) throw new IOException("В сборке нет ядра для этого телефона");
+            Process process;
+            synchronized (lock) {
                 stopCore();
                 ProcessBuilder builder = new ProcessBuilder(binary.getAbsolutePath(), "run", "-c", config.getAbsolutePath());
                 builder.directory(dir);
                 builder.environment().put("XRAY_LOCATION_ASSET", dir.getAbsolutePath());
                 builder.redirectErrorStream(true);
-                core = builder.start();
-                pump = new Thread(() -> drain(core), "rivers-log");
-                pump.start();
-                String error = waitReady(core);
-                if (error != null) throw new IOException(error);
-                openTun();
-                File yaml = new File(dir, "tproxy.yml");
-                write(yaml, tunnelYaml());
-                boolean started = TProxyService.TProxyStartService(yaml.getAbsolutePath(), tun.getFd());
-                if (!started) throw new IOException("Туннель не поднялся");
-                running = true;
-                status = "Включен";
-                LogBuffer.add("Rivers включён. Рунет напрямую, остальное через VPN");
-                promote("Включен");
-                startSpeed();
-            } catch (Exception error) {
-                LogBuffer.add(error.getMessage() == null ? "не запустилось" : error.getMessage());
-                shutdown(error.getMessage() == null ? "Ошибка" : error.getMessage(), false);
+                process = builder.start();
+                core = process;
             }
+            pump = new Thread(() -> drain(process), "rivers-log");
+            pump.start();
+            String error = waitReady(process);
+            if (gen != generation.get()) return;
+            if (error != null) throw new IOException(error);
+            openTun();
+            if (gen != generation.get()) {
+                releaseTunnel();
+                return;
+            }
+            File yaml = new File(dir, "tproxy.yml");
+            write(yaml, tunnelYaml());
+            boolean started = TProxyService.TProxyStartService(yaml.getAbsolutePath(), tun.getFd());
+            if (gen != generation.get()) {
+                releaseTunnel();
+                return;
+            }
+            if (!started) throw new IOException("Туннель не поднялся");
+            running = true;
+            status = "Включен";
+            LogBuffer.add("Rivers включён. Рунет напрямую, остальное через VPN");
+            try {
+                updateNotice("Включен");
+            } catch (Throwable ignored) {
+            }
+            startSpeed();
+        } catch (Exception error) {
+            if (gen != generation.get()) return;
+            LogBuffer.add(error.getMessage() == null ? "не запустилось" : error.getMessage());
+            shutdown(error.getMessage() == null ? "Ошибка" : error.getMessage(), false, origin);
+        } finally {
+            if (gen == generation.get()) starting = false;
         }
     }
 
@@ -177,12 +212,29 @@ public class RiversVpnService extends VpnService {
         }
     }
 
-    private void shutdown(String next, boolean paused) {
+    private void shutdown(String next, boolean paused, int startId) {
+        speedStop = true;
+        speedText = "";
+        running = false;
+        starting = false;
+        status = next;
+        releaseTunnel();
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } catch (Throwable ignored) {
+        }
+        if (paused) {
+            try {
+                showPaused();
+            } catch (Throwable ignored) {
+            }
+        } else {
+            stopSelf(startId);
+        }
+    }
+
+    private void releaseTunnel() {
         synchronized (lock) {
-            running = false;
-            speedStop = true;
-            speedText = "";
-            status = next;
             try {
                 if (TProxyService.TProxyIsRunning()) TProxyService.TProxyStopService();
             } catch (Throwable ignored) {
@@ -195,9 +247,6 @@ public class RiversVpnService extends VpnService {
                 tun = null;
             }
             stopCore();
-            stopForeground(STOP_FOREGROUND_REMOVE);
-            if (paused) showPaused();
-            else stopSelf();
         }
     }
 
@@ -225,7 +274,11 @@ public class RiversVpnService extends VpnService {
                 rx = now[0];
                 tx = now[1];
                 speedText = "↓ " + rate(down) + "   ↑ " + rate(up);
-                if (running && !speedStop) promote(speedText);
+                if (!running || speedStop) return;
+                try {
+                    updateNotice(speedText);
+                } catch (Throwable ignored) {
+                }
             }
         }, "rivers-speed").start();
     }
@@ -261,6 +314,11 @@ public class RiversVpnService extends VpnService {
         manager.notify(1, baseNotification("На паузе", content).addAction(action("Включить", ACTION_START, 2)).build());
     }
 
+    private void updateNotice(String text) {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) manager.notify(1, notification(text));
+    }
+
     private void promote(String text) {
         Notification notification = notification(text);
         if (Build.VERSION.SDK_INT >= 34) {
@@ -292,7 +350,7 @@ public class RiversVpnService extends VpnService {
     private Notification.Action action(String title, String command, int request) {
         Intent intent = new Intent(this, RiversVpnService.class).setAction(command);
         PendingIntent pending = PendingIntent.getService(this, request, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        return new Notification.Action.Builder(null, title, pending).build();
+        return new Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_stat), title, pending).build();
     }
 
     private void ensureChannel() {

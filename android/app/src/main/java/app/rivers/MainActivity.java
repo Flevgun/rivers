@@ -210,6 +210,8 @@ public class MainActivity extends android.app.Activity {
         power.setOnClickListener(view -> {
             if (RiversVpnService.running) {
                 startService(new Intent(this, RiversVpnService.class).setAction(RiversVpnService.ACTION_STOP));
+            } else if (RiversVpnService.starting) {
+                toast("Подключение");
             } else {
                 askVpn();
             }
