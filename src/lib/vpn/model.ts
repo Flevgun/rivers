@@ -243,7 +243,7 @@ export function parseVless(raw: string): Server | null {
       flow: query.get("flow") || "",
       sni: query.get("sni") || query.get("serverName") || "",
       fp: query.get("fp") || "firefox",
-      pbk: query.get("pbk") || "",
+      pbk: query.get("pbk") || query.get("password") || query.get("publicKey") || "",
       sid: query.get("sid") || "",
     };
   } catch {
@@ -576,6 +576,7 @@ export function buildXray(input: {
           realitySettings: {
             serverName: server.sni,
             fingerprint: server.fp || "firefox",
+            password: server.pbk,
             publicKey: server.pbk,
             shortId: server.sid,
             spiderX: "/",

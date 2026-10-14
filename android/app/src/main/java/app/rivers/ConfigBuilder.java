@@ -34,6 +34,8 @@ public final class ConfigBuilder {
                         .put("enabled", true)
                         .put("destOverride", new JSONArray().put("http").put("tls").put("quic")))));
 
+        String key = server.pbk == null ? "" : server.pbk.trim().replace(' ', '+');
+        if (key.isEmpty()) throw new JSONException("В сервере нет ключа. Обнови подписку");
         JSONObject proxy = new JSONObject()
                 .put("tag", "proxy")
                 .put("protocol", "vless")
@@ -47,8 +49,9 @@ public final class ConfigBuilder {
                         .put("realitySettings", new JSONObject()
                                 .put("serverName", server.sni)
                                 .put("fingerprint", blank(server.fp) ? "firefox" : server.fp)
-                                .put("publicKey", server.pbk)
-                                .put("shortId", server.sid)
+                                .put("password", key)
+                                .put("publicKey", key)
+                                .put("shortId", server.sid == null ? "" : server.sid)
                                 .put("spiderX", "/")));
         root.put("outbounds", new JSONArray()
                 .put(proxy)

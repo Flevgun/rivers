@@ -61,29 +61,35 @@ public final class VlessParser {
             if (sni.isEmpty()) sni = queryValue(query, "serverName");
             server.sni = sni;
             String fp = queryValue(query, "fp");
+            if (fp.isEmpty()) fp = queryValue(query, "fingerprint");
             server.fp = fp.isEmpty() ? "firefox" : fp;
-            server.pbk = queryValue(query, "pbk");
-            server.sid = queryValue(query, "sid");
+            server.pbk = first(queryValue(query, "pbk"), queryValue(query, "password"), queryValue(query, "publicKey"));
+            server.sid = first(queryValue(query, "sid"), queryValue(query, "shortId"));
             return server;
         } catch (RuntimeException ignored) {
             return null;
         }
     }
 
+    private static String first(String... values) {
+        for (String value : values) if (value != null && !value.isEmpty()) return value;
+        return "";
+    }
+
     private static String queryValue(String query, String key) {
         for (String part : query.split("&")) {
             int eq = part.indexOf('=');
             if (eq <= 0) continue;
-            if (key.equals(urlDecode(part.substring(0, eq)))) return urlDecode(part.substring(eq + 1));
+            if (key.equalsIgnoreCase(urlDecode(part.substring(0, eq)))) return urlDecode(part.substring(eq + 1));
         }
         return "";
     }
 
     private static String urlDecode(String value) {
         try {
-            return URLDecoder.decode(value, "UTF-8");
+            return URLDecoder.decode(value.replace("+", "%2B"), "UTF-8").trim();
         } catch (Exception ignored) {
-            return value;
+            return value == null ? "" : value.trim();
         }
     }
 }
