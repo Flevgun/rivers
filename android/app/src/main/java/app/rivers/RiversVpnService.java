@@ -180,12 +180,15 @@ public class RiversVpnService extends VpnService {
     }
 
     private Network physicalNetwork() {
-        ConnectivityManager manager = getSystemService(ConnectivityManager.class);
-        if (manager == null || Build.VERSION.SDK_INT < 23) return null;
-        Network active = manager.getActiveNetwork();
-        if (active != null && usable(manager, active)) return active;
-        for (Network network : manager.getAllNetworks()) {
-            if (usable(manager, network)) return network;
+        try {
+            ConnectivityManager manager = getSystemService(ConnectivityManager.class);
+            if (manager == null || Build.VERSION.SDK_INT < 23) return null;
+            Network active = manager.getActiveNetwork();
+            if (active != null && usable(manager, active)) return active;
+            for (Network network : manager.getAllNetworks()) {
+                if (usable(manager, network)) return network;
+            }
+        } catch (SecurityException ignored) {
         }
         return null;
     }
@@ -201,14 +204,20 @@ public class RiversVpnService extends VpnService {
 
     private void pinNetwork(Network network) {
         if (network == null || Build.VERSION.SDK_INT < 23) return;
-        ConnectivityManager manager = getSystemService(ConnectivityManager.class);
-        if (manager != null) manager.bindProcessToNetwork(network);
+        try {
+            ConnectivityManager manager = getSystemService(ConnectivityManager.class);
+            if (manager != null) manager.bindProcessToNetwork(network);
+        } catch (SecurityException ignored) {
+        }
     }
 
     private void unpinNetwork() {
         if (Build.VERSION.SDK_INT < 23) return;
-        ConnectivityManager manager = getSystemService(ConnectivityManager.class);
-        if (manager != null) manager.bindProcessToNetwork(null);
+        try {
+            ConnectivityManager manager = getSystemService(ConnectivityManager.class);
+            if (manager != null) manager.bindProcessToNetwork(null);
+        } catch (SecurityException ignored) {
+        }
     }
 
     private static String ipv4(String host) {
