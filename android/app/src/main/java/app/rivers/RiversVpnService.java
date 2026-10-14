@@ -8,6 +8,10 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.graphics.drawable.Icon;
+import android.net.ConnectivityManager;
+import android.net.IpPrefix;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
@@ -20,6 +24,8 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -81,6 +87,7 @@ public class RiversVpnService extends VpnService {
         running = false;
         starting = false;
         releaseTunnel();
+        unpinNetwork();
         super.onDestroy();
     }
 
@@ -90,6 +97,8 @@ public class RiversVpnService extends VpnService {
             if (gen != generation.get()) return;
             Server server = Store.selected(this);
             if (server == null) throw new IOException("Сначала добавь сервер");
+            Network physical = physicalNetwork();
+            pinNetwork(physical);
             File dir = getFilesDir();
             copyAsset(dir, "geoip.dat");
             copyAsset(dir, "geosite.dat");
@@ -112,7 +121,7 @@ public class RiversVpnService extends VpnService {
             String error = waitReady(process);
             if (gen != generation.get()) return;
             if (error != null) throw new IOException(error);
-            openTun();
+            openTun(server, physical);
             if (gen != generation.get()) {
                 releaseTunnel();
                 return;
@@ -142,19 +151,77 @@ public class RiversVpnService extends VpnService {
         }
     }
 
-    private void openTun() throws PackageManager.NameNotFoundException {
+    private void openTun(Server server, Network physical) throws PackageManager.NameNotFoundException {
         Builder builder = new Builder();
         builder.setSession("Rivers");
         builder.setMtu(1500);
         builder.setBlocking(true);
         builder.addAddress("172.19.0.1", 30);
         builder.addRoute("0.0.0.0", 0);
-        builder.addDnsServer("172.19.0.2");
+        builder.addDnsServer("1.1.1.1");
+        builder.addDnsServer("8.8.8.8");
         builder.allowFamily(OsConstants.AF_INET);
         if (Build.VERSION.SDK_INT >= 29) builder.setMetered(false);
+        if (physical != null && Build.VERSION.SDK_INT >= 22) builder.setUnderlyingNetworks(new Network[]{physical});
+        excludeServer(builder, server.address);
         applyApps(builder);
         tun = builder.establish();
         if (tun == null) throw new IllegalStateException("Система не дала VPN");
+    }
+
+    private void excludeServer(Builder builder, String host) {
+        if (Build.VERSION.SDK_INT < 33) return;
+        String ip = ipv4(host);
+        if (ip == null) return;
+        try {
+            builder.excludeRoute(new IpPrefix(InetAddress.getByName(ip), 32));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private Network physicalNetwork() {
+        ConnectivityManager manager = getSystemService(ConnectivityManager.class);
+        if (manager == null || Build.VERSION.SDK_INT < 23) return null;
+        Network active = manager.getActiveNetwork();
+        if (active != null && usable(manager, active)) return active;
+        for (Network network : manager.getAllNetworks()) {
+            if (usable(manager, network)) return network;
+        }
+        return null;
+    }
+
+    private static boolean usable(ConnectivityManager manager, Network network) {
+        NetworkCapabilities caps = manager.getNetworkCapabilities(network);
+        if (caps == null || caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return false;
+        if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false;
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                || caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET);
+    }
+
+    private void pinNetwork(Network network) {
+        if (network == null || Build.VERSION.SDK_INT < 23) return;
+        ConnectivityManager manager = getSystemService(ConnectivityManager.class);
+        if (manager != null) manager.bindProcessToNetwork(network);
+    }
+
+    private void unpinNetwork() {
+        if (Build.VERSION.SDK_INT < 23) return;
+        ConnectivityManager manager = getSystemService(ConnectivityManager.class);
+        if (manager != null) manager.bindProcessToNetwork(null);
+    }
+
+    private static String ipv4(String host) {
+        if (host == null || host.isEmpty()) return null;
+        String clean = host.trim().replaceAll("^\\[|\\]$", "");
+        if (clean.matches("\\d{1,3}(?:\\.\\d{1,3}){3}")) return clean;
+        try {
+            for (InetAddress address : InetAddress.getAllByName(clean)) {
+                if (address instanceof Inet4Address) return address.getHostAddress();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     private void applyApps(Builder builder) {
@@ -222,6 +289,7 @@ public class RiversVpnService extends VpnService {
         starting = false;
         status = next;
         releaseTunnel();
+        unpinNetwork();
         try {
             stopForeground(STOP_FOREGROUND_REMOVE);
         } catch (Throwable ignored) {
@@ -387,12 +455,6 @@ public class RiversVpnService extends VpnService {
                 + "socks5:\n"
                 + "  port: " + ConfigBuilder.SOCKS_PORT + "\n"
                 + "  address: 127.0.0.1\n"
-                + "  udp: 'udp'\n"
-                + "mapdns:\n"
-                + "  address: 172.19.0.2\n"
-                + "  port: 53\n"
-                + "  network: 198.18.0.0\n"
-                + "  netmask: 255.254.0.0\n"
-                + "  cache-size: 10000\n";
+                + "  udp: 'udp'\n";
     }
 }
