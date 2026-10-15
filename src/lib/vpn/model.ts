@@ -202,7 +202,10 @@ export function rulesFor(preset: PresetId): RouteRule[] {
         domains: "riotgames.com,leagueoflegends.com,pvp.net",
         processes: "RiotClientServices.exe,LeagueClient.exe",
       }),
-      rule("ARC Raiders", "direct", { processes: "PioneerGame.exe" }),
+      rule("ARC Raiders", "direct", {
+        domains: "embark.net,embark.games,arcraiders.com",
+        processes: "PioneerGame.exe,start_protected_game.exe,EasyAntiCheat_EOS.exe,EasyAntiCheat.exe",
+      }),
       rule("Space Marine 2", "direct", {
         processes: "Warhammer 40000 Space Marine 2.exe,start_protected_game.exe",
         network: "udp",
@@ -439,11 +442,11 @@ export function buildSingbox(input: {
     : { type: "direct", tag: "proxy" };
 
   const routeRules = [];
-  if (tun.sniff) routeRules.push({ action: "sniff" });
   if (mode === "tun") {
     routeRules.push({ network: "udp", port: [53], action: "hijack-dns" });
     routeRules.push({ network: "tcp", port: [53], action: "reject" });
   }
+  if (tun.sniff) routeRules.push({ action: "sniff" });
   const serverCidr = server ? hostCidr(server.address) : "";
   if (serverCidr) routeRules.push({ ip_cidr: [serverCidr], action: "route", outbound: "direct" });
   else if (server?.address) routeRules.push({ domain: [server.address], action: "route", outbound: "direct" });
@@ -512,8 +515,8 @@ export function buildSingbox(input: {
             auto_route: true,
             strict_route: true,
             stack: "mixed",
-            endpoint_independent_nat: false,
-            udp_timeout: "5m",
+            endpoint_independent_nat: true,
+            udp_timeout: "10m",
             ...(serverCidr ? { route_exclude_address: [serverCidr] } : {}),
           },
     ],
