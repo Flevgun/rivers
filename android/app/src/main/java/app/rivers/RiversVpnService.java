@@ -151,7 +151,7 @@ public class RiversVpnService extends VpnService {
             if (!started) throw new IOException("Туннель не поднялся");
             running = true;
             status = "Включен";
-            LogBuffer.add("Rivers включён");
+            LogBuffer.add("Rivers включён. Рунет напрямую, остальное через туннель");
             try {
                 updateNotice("Включен");
             } catch (Throwable ignored) {

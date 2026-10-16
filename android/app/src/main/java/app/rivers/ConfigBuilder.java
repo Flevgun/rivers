@@ -60,8 +60,18 @@ public final class ConfigBuilder {
         JSONObject root = new JSONObject();
         root.put("log", new JSONObject().put("loglevel", "info"));
         root.put("dns", new JSONObject()
-                .put("queryStrategy", "UseIP")
-                .put("servers", new JSONArray().put("1.1.1.1").put("8.8.8.8")));
+                .put("queryStrategy", "UseIPv4")
+                .put("servers", new JSONArray()
+                        .put(new JSONObject()
+                                .put("address", "77.88.8.8")
+                                .put("skipFallback", true)
+                                .put("domains", new JSONArray()
+                                        .put("domain:ru")
+                                        .put("domain:su")
+                                        .put("domain:xn--p1ai")
+                                        .put("geosite:category-ru")))
+                        .put("1.1.1.1")
+                        .put("8.8.8.8")));
         root.put("inbounds", new JSONArray().put(new JSONObject()
                 .put("tag", "socks")
                 .put("listen", "127.0.0.1")
@@ -97,7 +107,15 @@ public final class ConfigBuilder {
                                 .put("port", "53")
                                 .put("ip", new JSONArray().put("1.1.1.1").put("8.8.8.8")))
                         .put(new JSONObject().put("type", "field").put("outboundTag", "direct")
-                                .put("ip", new JSONArray().put("10.0.0.0/8").put("172.16.0.0/12").put("192.168.0.0/16").put("127.0.0.0/8")))));
+                                .put("ip", new JSONArray().put("10.0.0.0/8").put("172.16.0.0/12").put("192.168.0.0/16").put("127.0.0.0/8")))
+                        .put(new JSONObject().put("type", "field").put("outboundTag", "direct")
+                                .put("domain", new JSONArray()
+                                        .put("geosite:category-ru")
+                                        .put("domain:ru")
+                                        .put("domain:su")
+                                        .put("domain:xn--p1ai")))
+                        .put(new JSONObject().put("type", "field").put("outboundTag", "direct")
+                                .put("ip", new JSONArray().put("geoip:ru")))));
         return root.toString(2);
     }
 
