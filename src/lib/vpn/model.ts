@@ -616,7 +616,12 @@ function xrayStream(server: Server) {
   } else if (network === "grpc") {
     stream.grpcSettings = { serviceName: server.serviceName || "" };
   } else if (network === "xhttp") {
-    stream.xhttpSettings = { path: server.path || "/", host: server.host || undefined, mode: server.mode || undefined };
+    stream.xhttpSettings = {
+      path: server.path || "/",
+      host: server.host || undefined,
+      mode: server.mode || undefined,
+      extra: { scMaxEachPostBytes: 65536, scMinPostsIntervalMs: 30 },
+    };
   } else if (network === "http") {
     stream.httpSettings = { path: server.path || "/", host: server.host ? [server.host] : undefined };
   }

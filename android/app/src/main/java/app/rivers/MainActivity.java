@@ -20,6 +20,9 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.text.TextWatcher;
 import android.graphics.drawable.ColorDrawable;
 import android.view.LayoutInflater;
@@ -123,7 +126,7 @@ public class MainActivity extends android.app.Activity {
             if (on && RiversVpnService.speedText != null && !RiversVpnService.speedText.isEmpty()) homeHint.setText(RiversVpnService.speedText);
             else if (!on) homeHint.setText("Рунет напрямую, остальное через VPN");
             paintChrome();
-            if (pageLogs.getVisibility() == View.VISIBLE) logs.setText(filteredLogs());
+            if (pageLogs.getVisibility() == View.VISIBLE) logs.setText(paintedLogs());
             handler.postDelayed(this, 700);
         }
     };
@@ -236,7 +239,7 @@ public class MainActivity extends android.app.Activity {
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 logQuery = s.toString();
-                if (pageLogs.getVisibility() == View.VISIBLE) logs.setText(filteredLogs());
+                if (pageLogs.getVisibility() == View.VISIBLE) logs.setText(paintedLogs());
             }
 
             @Override
@@ -245,7 +248,7 @@ public class MainActivity extends android.app.Activity {
         logErrors.setOnClickListener(view -> {
             errorsOnly = !errorsOnly;
             logErrors.setAlpha(errorsOnly ? 1f : 0.55f);
-            if (pageLogs.getVisibility() == View.VISIBLE) logs.setText(filteredLogs());
+            if (pageLogs.getVisibility() == View.VISIBLE) logs.setText(paintedLogs());
         });
         showTab(0);
         checkUpdate(false);
@@ -282,6 +285,26 @@ public class MainActivity extends android.app.Activity {
         return out.length() == 0 ? "Ничего не найдено." : out.toString();
     }
 
+    private CharSequence paintedLogs() {
+        String raw = filteredLogs();
+        SpannableStringBuilder painted = new SpannableStringBuilder();
+        String[] lines = raw.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            if (i > 0) painted.append('\n');
+            int start = painted.length();
+            painted.append(lines[i]);
+            if (isBad(lines[i])) {
+                painted.setSpan(new ForegroundColorSpan(0xFFFF5C6A), start, painted.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+        }
+        return painted;
+    }
+
+    private static boolean isBad(String line) {
+        String lower = line.toLowerCase(Locale.US);
+        return lower.contains("error") || lower.contains("fatal") || lower.contains("fail") || lower.contains("ошиб") || lower.contains("413") || lower.contains("unexpected");
+    }
+
     private void showTab(int next) {
         tab = next;
         pageHome.setVisibility(next == 0 ? View.VISIBLE : View.GONE);
@@ -292,7 +315,7 @@ public class MainActivity extends android.app.Activity {
         paintTab(tabHome, next == 0);
         paintTab(tabServers, next == 1);
         paintTab(tabSettings, next >= 2);
-        if (next == 4) logs.setText(filteredLogs());
+        if (next == 4) logs.setText(paintedLogs());
     }
 
     private void setMode(String mode) {

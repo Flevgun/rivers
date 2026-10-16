@@ -124,7 +124,7 @@ export function ClientApp() {
       void bridge?.setTray?.(useVpn.getState().settings.tray);
       off =
         bridge?.onLog?.((line) => {
-          const level = /FATAL|ERROR|panic|ядро остановилось|не запустилось|не удалась/i.test(line) ? "error" : "info";
+          const level = /FATAL|ERROR|panic|fail|413|unexpected response|ядро остановилось|не запустилось|не удалась/i.test(line) ? "error" : "info";
           useVpn.getState().pushLog(level, line);
         }) ?? (() => {});
       const offState =

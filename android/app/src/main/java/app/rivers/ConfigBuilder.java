@@ -106,6 +106,7 @@ public final class ConfigBuilder {
             JSONObject xhttp = new JSONObject().put("path", blank(server.path) ? "/" : server.path);
             if (!blank(server.host)) xhttp.put("host", server.host);
             if (!blank(server.mode)) xhttp.put("mode", server.mode);
+            xhttp.put("extra", new JSONObject().put("scMaxEachPostBytes", 65536).put("scMinPostsIntervalMs", 30));
             stream.put("xhttpSettings", xhttp);
         } else if ("http".equals(network)) {
             JSONObject http = new JSONObject().put("path", blank(server.path) ? "/" : server.path);
