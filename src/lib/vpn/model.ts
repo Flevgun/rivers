@@ -273,6 +273,8 @@ export function parseVless(raw: string): Server | null {
 }
 
 export function parseMany(text: string): Server[] {
+  const json = parseXrayJson(text);
+  if (json.length) return json;
   const found: Server[] = [];
   const chunks = text.split(/\s+/).join("\n").split("\n");
   for (const chunk of chunks) {
@@ -282,7 +284,59 @@ export function parseMany(text: string): Server[] {
   if (found.length) return found;
   try {
     const decoded = atob(text.replace(/\s/g, ""));
+    if (!decoded || decoded === text) return [];
     return parseMany(decoded);
+  } catch {
+    return [];
+  }
+}
+
+function parseXrayJson(text: string): Server[] {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{")) return [];
+  try {
+    const root = JSON.parse(trimmed) as {
+      remarks?: string;
+      outbounds?: Array<Record<string, unknown>>;
+    };
+    const found: Server[] = [];
+    for (const outbound of root.outbounds || []) {
+      if (outbound.protocol !== "vless") continue;
+      const settings = outbound.settings as { vnext?: Array<Record<string, unknown>> } | undefined;
+      const hop = settings?.vnext?.[0];
+      const user = (hop?.users as Array<Record<string, unknown>> | undefined)?.[0];
+      const stream = outbound.streamSettings as Record<string, unknown> | undefined;
+      if (!hop || !user || !stream) continue;
+      const tls = (stream.tlsSettings || stream.realitySettings) as Record<string, unknown> | undefined;
+      const xhttp = (stream.xhttpSettings || stream.splithttpSettings) as Record<string, unknown> | undefined;
+      const extra = xhttp?.extra;
+      const alpn = Array.isArray(tls?.alpn) ? (tls?.alpn as unknown[]).map(String).join(",") : "";
+      const address = String(hop.address || "");
+      const port = Number(hop.port);
+      const uuid = String(user.id || "");
+      if (!address || !port || !uuid) continue;
+      found.push({
+        id: uid(),
+        name: root.remarks || address,
+        address,
+        port,
+        uuid,
+        flow: String(user.flow || ""),
+        sni: String(tls?.serverName || ""),
+        fp: String(tls?.fingerprint || "firefox"),
+        pbk: String(tls?.publicKey || tls?.password || ""),
+        sid: String(tls?.shortId || ""),
+        security: String(stream.security || ""),
+        network: String(stream.network || "tcp"),
+        host: String(xhttp?.host || ""),
+        path: String(xhttp?.path || ""),
+        mode: String(xhttp?.mode || ""),
+        extra: extra && typeof extra === "object" ? JSON.stringify(extra) : "",
+        alpn,
+        spiderX: String(tls?.spiderX || ""),
+      });
+    }
+    return found;
   } catch {
     return [];
   }
@@ -619,13 +673,13 @@ function xrayStream(server: Server) {
     stream.grpcSettings = { serviceName: server.serviceName || "" };
   } else if (network === "xhttp") {
     const extra = xhttpExtra(server);
-    const mode = xhttpMode(server, extra);
+    const mode = String(server.mode || extra.mode || "");
+    const path = String(server.path || extra.path || "/");
+    const host = String(server.host || extra.host || "");
     stream.xhttpSettings = {
-      path: server.path || "/",
-      host: server.host || undefined,
-      mode,
-      scMaxEachPostBytes: extra.scMaxEachPostBytes,
-      scMinPostsIntervalMs: extra.scMinPostsIntervalMs,
+      path,
+      host: host || undefined,
+      mode: mode || undefined,
       extra,
     };
   } else if (network === "http") {
@@ -635,32 +689,14 @@ function xrayStream(server: Server) {
 }
 
 function xhttpExtra(server: Server) {
-  let extra: Record<string, unknown> = {};
-  if (server.extra) {
-    try {
-      const parsed = JSON.parse(server.extra) as Record<string, unknown>;
-      if (parsed && typeof parsed === "object") extra = { ...parsed };
-    } catch {
-      extra = {};
-    }
+  if (!server.extra) return {};
+  try {
+    const parsed = JSON.parse(server.extra) as Record<string, unknown>;
+    if (parsed && typeof parsed === "object") return { ...parsed };
+  } catch {
+    return {};
   }
-  const cap = rangeUpper(extra.scMaxEachPostBytes);
-  if (cap <= 0 || cap > 32768) extra.scMaxEachPostBytes = "4096";
-  if (extra.scMinPostsIntervalMs == null) extra.scMinPostsIntervalMs = "10";
-  return extra;
-}
-
-function xhttpMode(server: Server, extra: Record<string, unknown>) {
-  const mode = String(server.mode || extra.mode || "").toLowerCase();
-  if (!mode || mode === "auto" || mode === "packet-up") return "stream-up";
-  return mode;
-}
-
-function rangeUpper(value: unknown) {
-  const text = String(value ?? "").trim();
-  const part = text.includes("-") ? text.slice(text.lastIndexOf("-") + 1) : text;
-  const number = Number(part);
-  return Number.isFinite(number) ? number : 0;
+  return {};
 }
 
 function xrayDomain(item: string) {

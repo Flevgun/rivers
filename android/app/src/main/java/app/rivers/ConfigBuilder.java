@@ -84,21 +84,18 @@ public final class ConfigBuilder {
             } catch (JSONException ignored) {
             }
         }
-        String mode = server.mode;
-        if (blank(mode)) mode = extra.optString("mode");
-        if (blank(mode) || "auto".equalsIgnoreCase(mode) || "packet-up".equalsIgnoreCase(mode)) mode = "stream-up";
-        if (rangeUpper(extra.opt("scMaxEachPostBytes")) <= 0 || rangeUpper(extra.opt("scMaxEachPostBytes")) > 32768) {
-            extra.put("scMaxEachPostBytes", "4096");
-        }
-        if (!extra.has("scMinPostsIntervalMs")) extra.put("scMinPostsIntervalMs", "10");
-        JSONObject xhttp = new JSONObject()
-                .put("path", blank(server.path) ? "/" : server.path)
-                .put("mode", mode)
-                .put("scMaxEachPostBytes", extra.get("scMaxEachPostBytes"))
-                .put("scMinPostsIntervalMs", extra.get("scMinPostsIntervalMs"))
-                .put("extra", extra);
-        if (!blank(server.host)) xhttp.put("host", server.host);
+        String mode = first(server.mode, extra.optString("mode"));
+        String path = first(server.path, extra.optString("path"), "/");
+        String host = first(server.host, extra.optString("host"));
+        JSONObject xhttp = new JSONObject().put("path", path).put("extra", extra);
+        if (!blank(mode)) xhttp.put("mode", mode);
+        if (!blank(host)) xhttp.put("host", host);
         return xhttp;
+    }
+
+    private static String first(String... values) {
+        for (String value : values) if (!blank(value)) return value;
+        return "";
     }
 
     private static JSONObject stream(Server server, String security) throws JSONException {
@@ -136,18 +133,6 @@ public final class ConfigBuilder {
         }
         stream.put("sockopt", new JSONObject().put("domainStrategy", "UseIPv4"));
         return stream;
-    }
-
-    private static int rangeUpper(Object value) {
-        if (value == null) return 0;
-        String text = String.valueOf(value).trim();
-        int dash = text.lastIndexOf('-');
-        if (dash >= 0) text = text.substring(dash + 1).trim();
-        try {
-            return Integer.parseInt(text);
-        } catch (NumberFormatException ignored) {
-            return 0;
-        }
     }
 
     private static String securityOf(Server server) {

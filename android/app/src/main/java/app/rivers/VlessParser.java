@@ -2,6 +2,9 @@ package app.rivers;
 
 import android.util.Base64;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -11,14 +14,90 @@ public final class VlessParser {
     private VlessParser() {}
 
     public static List<Server> parseMany(String text) {
+        List<Server> json = parseXrayJson(text);
+        if (!json.isEmpty()) return json;
         List<Server> found = parseLines(text);
         if (!found.isEmpty()) return found;
         try {
             String decoded = new String(Base64.decode(text.replaceAll("\\s", ""), Base64.DEFAULT), StandardCharsets.UTF_8);
+            json = parseXrayJson(decoded);
+            if (!json.isEmpty()) return json;
             return parseLines(decoded);
         } catch (IllegalArgumentException ignored) {
             return found;
         }
+    }
+
+    private static List<Server> parseXrayJson(String text) {
+        List<Server> found = new ArrayList<>();
+        if (text == null || !text.trim().startsWith("{")) return found;
+        try {
+            JSONObject root = new JSONObject(text);
+            JSONArray outbounds = root.optJSONArray("outbounds");
+            if (outbounds == null) return found;
+            for (int i = 0; i < outbounds.length(); i++) {
+                JSONObject outbound = outbounds.optJSONObject(i);
+                if (outbound == null || !"vless".equalsIgnoreCase(outbound.optString("protocol"))) continue;
+                JSONObject settings = outbound.optJSONObject("settings");
+                JSONArray vnext = settings == null ? null : settings.optJSONArray("vnext");
+                JSONObject hop = vnext == null ? null : vnext.optJSONObject(0);
+                JSONArray users = hop == null ? null : hop.optJSONArray("users");
+                JSONObject user = users == null ? null : users.optJSONObject(0);
+                JSONObject stream = outbound.optJSONObject("streamSettings");
+                if (hop == null || user == null || stream == null) continue;
+                Server server = new Server();
+                server.address = hop.optString("address");
+                server.port = hop.optInt("port");
+                server.uuid = user.optString("id");
+                server.flow = user.optString("flow");
+                server.name = root.optString("remarks", server.address);
+                server.network = stream.optString("network", "tcp");
+                server.security = stream.optString("security");
+                JSONObject tls = stream.optJSONObject("tlsSettings");
+                if (tls == null) tls = stream.optJSONObject("realitySettings");
+                if (tls != null) {
+                    server.sni = tls.optString("serverName");
+                    server.fp = tls.optString("fingerprint", "firefox");
+                    server.pbk = first(tls.optString("publicKey"), tls.optString("password"));
+                    server.sid = tls.optString("shortId");
+                    server.spiderX = tls.optString("spiderX");
+                    JSONArray alpn = tls.optJSONArray("alpn");
+                    if (alpn != null) {
+                        StringBuilder joined = new StringBuilder();
+                        for (int n = 0; n < alpn.length(); n++) {
+                            if (n > 0) joined.append(',');
+                            joined.append(alpn.optString(n));
+                        }
+                        server.alpn = joined.toString();
+                    }
+                }
+                JSONObject xhttp = stream.optJSONObject("xhttpSettings");
+                if (xhttp == null) xhttp = stream.optJSONObject("splithttpSettings");
+                if (xhttp != null) {
+                    server.mode = xhttp.optString("mode");
+                    server.host = xhttp.optString("host");
+                    server.path = xhttp.optString("path");
+                    JSONObject extra = xhttp.optJSONObject("extra");
+                    if (extra != null) server.extra = extra.toString();
+                }
+                JSONObject ws = stream.optJSONObject("wsSettings");
+                if (ws != null) {
+                    server.path = ws.optString("path", server.path);
+                    JSONObject headers = ws.optJSONObject("headers");
+                    if (headers != null && blank(server.host)) server.host = headers.optString("Host");
+                }
+                JSONObject grpc = stream.optJSONObject("grpcSettings");
+                if (grpc != null) server.serviceName = grpc.optString("serviceName");
+                if (!server.uuid.isEmpty() && !server.address.isEmpty() && server.port > 0) found.add(server);
+            }
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+        return found;
+    }
+
+    private static boolean blank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private static List<Server> parseLines(String text) {
