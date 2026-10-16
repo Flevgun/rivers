@@ -98,6 +98,7 @@ public class MainActivity extends android.app.Activity {
     private ImageView tabSettings;
     private TextView openApps;
     private TextView openLogs;
+    private TextView openConfig;
     private TextView openUpdate;
     private TextView updateBanner;
     private TextView backApps;
@@ -108,6 +109,8 @@ public class MainActivity extends android.app.Activity {
     private View pageServers;
     private View pageApps;
     private View pageLogs;
+    private View pageConfig;
+    private EditText configText;
     private View pageSettings;
     private AppAdapter apps;
     private boolean spinning;
@@ -166,12 +169,15 @@ public class MainActivity extends android.app.Activity {
         pageServers = findViewById(R.id.pageServers);
         pageApps = findViewById(R.id.pageApps);
         pageLogs = findViewById(R.id.pageLogs);
+        pageConfig = findViewById(R.id.pageConfig);
+        configText = findViewById(R.id.configText);
         pageSettings = findViewById(R.id.pageSettings);
         tabHome = findViewById(R.id.tabHome);
         tabServers = findViewById(R.id.tabServers);
         tabSettings = findViewById(R.id.tabSettings);
         openApps = findViewById(R.id.openApps);
         openLogs = findViewById(R.id.openLogs);
+        openConfig = findViewById(R.id.openConfig);
         openUpdate = findViewById(R.id.openUpdate);
         backApps = findViewById(R.id.backApps);
         backLogs = findViewById(R.id.backLogs);
@@ -201,6 +207,7 @@ public class MainActivity extends android.app.Activity {
         tabSettings.setOnClickListener(view -> showTab(2));
         openApps.setOnClickListener(view -> showTab(3));
         openLogs.setOnClickListener(view -> showTab(4));
+        openConfig.setOnClickListener(view -> showTab(5));
         openUpdate.setOnClickListener(view -> {
             if (updateBanner.getVisibility() == View.VISIBLE) startUpdate();
             else checkUpdate(true);
@@ -208,6 +215,18 @@ public class MainActivity extends android.app.Activity {
         updateBanner.setOnClickListener(view -> startUpdate());
         backApps.setOnClickListener(view -> showTab(2));
         backLogs.setOnClickListener(view -> showTab(2));
+        findViewById(R.id.backConfig).setOnClickListener(view -> showTab(2));
+        findViewById(R.id.saveConfig).setOnClickListener(view -> saveConfig());
+        findViewById(R.id.resetConfig).setOnClickListener(view -> {
+            Store.setCustomConfig(this, "");
+            fillConfig();
+            toast("Снова собирается из сервера");
+        });
+        findViewById(R.id.copyConfig).setOnClickListener(view -> {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            clipboard.setPrimaryClip(ClipData.newPlainText("Rivers", configText.getText()));
+            toast("Конфиг в буфере");
+        });
         serverName.setOnClickListener(view -> showTab(1));
         modeDirect.setOnClickListener(view -> setMode("direct"));
         modeVpn.setOnClickListener(view -> setMode("vpn"));
@@ -312,10 +331,12 @@ public class MainActivity extends android.app.Activity {
         pageSettings.setVisibility(next == 2 ? View.VISIBLE : View.GONE);
         pageApps.setVisibility(next == 3 ? View.VISIBLE : View.GONE);
         pageLogs.setVisibility(next == 4 ? View.VISIBLE : View.GONE);
+        pageConfig.setVisibility(next == 5 ? View.VISIBLE : View.GONE);
         paintTab(tabHome, next == 0);
         paintTab(tabServers, next == 1);
         paintTab(tabSettings, next >= 2);
         if (next == 4) logs.setText(paintedLogs());
+        if (next == 5) fillConfig();
     }
 
     private void setMode(String mode) {
@@ -329,8 +350,39 @@ public class MainActivity extends android.app.Activity {
         paintSegment(modeDirect, !vpn);
         paintSegment(modeVpn, vpn);
         appsHint.setText(vpn
-                ? "Только отмеченные идут в VPN. Остальные приложения — напрямую, мимо правил конфига. Применится после переподключения."
-                : "Отмеченные идут напрямую, мимо VPN. Остальные — по конфигу: рунет напрямую, прочее через VPN. Применится после переподключения.");
+                ? "Только отмеченные входят в туннель. Остальные идут напрямую и правила конфига их не видят."
+                : "Отмеченные идут напрямую. Остальные идут по конфигу. Если конфиг свой, действуют его правила.");
+    }
+
+    private void fillConfig() {
+        String custom = Store.customConfig(this);
+        if (custom != null && !custom.trim().isEmpty()) {
+            configText.setText(custom);
+            return;
+        }
+        try {
+            Server server = Store.selected(this);
+            configText.setText(server == null ? "{\n}" : ConfigBuilder.xray(server));
+        } catch (Exception error) {
+            configText.setText("");
+        }
+    }
+
+    private void saveConfig() {
+        String text = configText.getText() == null ? "" : configText.getText().toString().trim();
+        if (text.isEmpty()) {
+            Store.setCustomConfig(this, "");
+            toast("Пустой конфиг не сохранён");
+            return;
+        }
+        try {
+            new org.json.JSONObject(text);
+        } catch (org.json.JSONException error) {
+            toast("Это не JSON");
+            return;
+        }
+        Store.setCustomConfig(this, text);
+        toast(RiversVpnService.running ? "Сохранено. Переподключись" : "Сохранено");
     }
 
     private void paintChrome() {

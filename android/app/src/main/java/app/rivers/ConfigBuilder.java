@@ -9,6 +9,51 @@ import org.json.JSONObject;
 public final class ConfigBuilder {
     public static final int SOCKS_PORT = 2080;
 
+    public static final class Prepared {
+        public final String json;
+        public final int port;
+
+        private Prepared(String json, int port) {
+            this.json = json;
+            this.port = port;
+        }
+
+        public static Prepared from(String raw) throws JSONException {
+            JSONObject root = new JSONObject(raw);
+            JSONArray inbounds = root.optJSONArray("inbounds");
+            if (inbounds == null) {
+                inbounds = new JSONArray();
+                root.put("inbounds", inbounds);
+            }
+            int port = 0;
+            for (int i = 0; i < inbounds.length(); i++) {
+                JSONObject inbound = inbounds.optJSONObject(i);
+                if (inbound == null) continue;
+                String protocol = inbound.optString("protocol");
+                if (!"socks".equals(protocol) && !"mixed".equals(protocol)) continue;
+                int found = inbound.optInt("port", 0);
+                if (found > 0) {
+                    port = found;
+                    break;
+                }
+            }
+            if (port == 0) {
+                port = SOCKS_PORT;
+                inbounds.put(new JSONObject()
+                        .put("tag", "socks")
+                        .put("listen", "127.0.0.1")
+                        .put("port", port)
+                        .put("protocol", "socks")
+                        .put("settings", new JSONObject().put("udp", true))
+                        .put("sniffing", new JSONObject()
+                                .put("enabled", true)
+                                .put("routeOnly", true)
+                                .put("destOverride", new JSONArray().put("http").put("tls"))));
+            }
+            return new Prepared(root.toString(2), port);
+        }
+    }
+
     private ConfigBuilder() {}
 
     public static String xray(Server server) throws JSONException {

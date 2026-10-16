@@ -196,6 +196,14 @@ public final class Store {
         prefs(context).edit().putString("appMode", "vpn".equals(mode) ? "vpn" : "direct").apply();
     }
 
+    public static String customConfig(Context context) {
+        return prefs(context).getString("customConfig", "");
+    }
+
+    public static void setCustomConfig(Context context, String config) {
+        prefs(context).edit().putString("customConfig", config == null ? "" : config).apply();
+    }
+
     public static String theme(Context context) {
         return prefs(context).getString("theme", "mint");
     }

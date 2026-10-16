@@ -108,7 +108,16 @@ public class RiversVpnService extends VpnService {
             copyAsset(dir, "geoip.dat");
             copyAsset(dir, "geosite.dat");
             File config = new File(dir, "config.json");
-            write(config, ConfigBuilder.xray(server));
+            String custom = Store.customConfig(this);
+            String body = custom != null && !custom.trim().isEmpty() ? custom : ConfigBuilder.xray(server);
+            int socksPort = ConfigBuilder.SOCKS_PORT;
+            try {
+                ConfigBuilder.Prepared prepared = ConfigBuilder.Prepared.from(body);
+                body = prepared.json;
+                socksPort = prepared.port;
+            } catch (Exception ignored) {
+            }
+            write(config, body);
             File binary = new File(getApplicationInfo().nativeLibraryDir, "libxray.so");
             if (!binary.exists()) throw new IOException("В сборке нет ядра для этого телефона");
             Process process;
@@ -123,7 +132,7 @@ public class RiversVpnService extends VpnService {
             }
             pump = new Thread(() -> drain(process), "rivers-log");
             pump.start();
-            String error = waitReady(process);
+            String error = waitReady(process, socksPort);
             if (gen != generation.get()) return;
             if (error != null) throw new IOException(error);
             openTun(server, physical);
@@ -132,7 +141,7 @@ public class RiversVpnService extends VpnService {
                 return;
             }
             File yaml = new File(dir, "tproxy.yml");
-            write(yaml, tunnelYaml());
+            write(yaml, tunnelYaml(socksPort));
             boolean started = TProxyService.TProxyStartService(yaml.getAbsolutePath(), tun.getFd());
             if (gen != generation.get()) {
                 releaseTunnel();
@@ -284,13 +293,13 @@ public class RiversVpnService extends VpnService {
         }
     }
 
-    private String waitReady(Process process) {
+    private String waitReady(Process process, int port) {
         for (int i = 0; i < 40; i++) {
             if (!process.isAlive()) {
                 return "Ядро остановилось";
             }
             try (Socket socket = new Socket()) {
-                socket.connect(new InetSocketAddress("127.0.0.1", ConfigBuilder.SOCKS_PORT), 200);
+                socket.connect(new InetSocketAddress("127.0.0.1", port), 200);
                 return null;
             } catch (IOException ignored) {
                 try {
@@ -499,7 +508,7 @@ public class RiversVpnService extends VpnService {
         }
     }
 
-    private static String tunnelYaml() {
+    private static String tunnelYaml(int port) {
         return "misc:\n"
                 + "  tcp-read-write-timeout: 300000\n"
                 + "  udp-read-write-timeout: 60000\n"
@@ -507,7 +516,7 @@ public class RiversVpnService extends VpnService {
                 + "tunnel:\n"
                 + "  mtu: 1500\n"
                 + "socks5:\n"
-                + "  port: " + ConfigBuilder.SOCKS_PORT + "\n"
+                + "  port: " + port + "\n"
                 + "  address: 127.0.0.1\n"
                 + "  udp: 'udp'\n";
     }
