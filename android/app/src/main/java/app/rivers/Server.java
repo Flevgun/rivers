@@ -21,6 +21,7 @@ public class Server {
     public String path = "";
     public String serviceName = "";
     public String mode = "";
+    public String extra = "";
     public String alpn = "";
     public String spiderX = "";
 
@@ -43,6 +44,7 @@ public class Server {
         item.put("path", path);
         item.put("serviceName", serviceName);
         item.put("mode", mode);
+        item.put("extra", extra);
         item.put("alpn", alpn);
         item.put("spiderX", spiderX);
         return item;
@@ -66,6 +68,7 @@ public class Server {
         server.path = item.optString("path");
         server.serviceName = item.optString("serviceName");
         server.mode = item.optString("mode");
+        server.extra = item.optString("extra");
         server.alpn = item.optString("alpn");
         server.spiderX = item.optString("spiderX");
         server.id = item.optString("id");

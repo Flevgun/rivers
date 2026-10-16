@@ -72,6 +72,7 @@ public final class VlessParser {
             server.path = queryValue(query, "path");
             server.serviceName = queryValue(query, "serviceName");
             server.mode = queryValue(query, "mode");
+            server.extra = queryValue(query, "extra");
             server.alpn = queryValue(query, "alpn");
             server.spiderX = first(queryValue(query, "spx"), queryValue(query, "spiderX"));
             return server;

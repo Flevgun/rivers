@@ -76,6 +76,31 @@ public final class ConfigBuilder {
         return user;
     }
 
+    private static JSONObject xhttpSettings(Server server) throws JSONException {
+        JSONObject extra = new JSONObject();
+        if (!blank(server.extra)) {
+            try {
+                extra = new JSONObject(server.extra);
+            } catch (JSONException ignored) {
+            }
+        }
+        String mode = server.mode;
+        if (blank(mode)) mode = extra.optString("mode");
+        if (blank(mode) || "auto".equalsIgnoreCase(mode) || "packet-up".equalsIgnoreCase(mode)) mode = "stream-up";
+        if (rangeUpper(extra.opt("scMaxEachPostBytes")) <= 0 || rangeUpper(extra.opt("scMaxEachPostBytes")) > 32768) {
+            extra.put("scMaxEachPostBytes", "4096");
+        }
+        if (!extra.has("scMinPostsIntervalMs")) extra.put("scMinPostsIntervalMs", "10");
+        JSONObject xhttp = new JSONObject()
+                .put("path", blank(server.path) ? "/" : server.path)
+                .put("mode", mode)
+                .put("scMaxEachPostBytes", extra.get("scMaxEachPostBytes"))
+                .put("scMinPostsIntervalMs", extra.get("scMinPostsIntervalMs"))
+                .put("extra", extra);
+        if (!blank(server.host)) xhttp.put("host", server.host);
+        return xhttp;
+    }
+
     private static JSONObject stream(Server server, String security) throws JSONException {
         String network = networkOf(server);
         JSONObject stream = new JSONObject().put("network", network).put("security", security);
@@ -103,11 +128,7 @@ public final class ConfigBuilder {
         } else if ("grpc".equals(network)) {
             stream.put("grpcSettings", new JSONObject().put("serviceName", server.serviceName == null ? "" : server.serviceName));
         } else if ("xhttp".equals(network)) {
-            JSONObject xhttp = new JSONObject().put("path", blank(server.path) ? "/" : server.path);
-            if (!blank(server.host)) xhttp.put("host", server.host);
-            if (!blank(server.mode)) xhttp.put("mode", server.mode);
-            xhttp.put("extra", new JSONObject().put("scMaxEachPostBytes", 65536).put("scMinPostsIntervalMs", 30));
-            stream.put("xhttpSettings", xhttp);
+            stream.put("xhttpSettings", xhttpSettings(server));
         } else if ("http".equals(network)) {
             JSONObject http = new JSONObject().put("path", blank(server.path) ? "/" : server.path);
             if (!blank(server.host)) http.put("host", new JSONArray().put(server.host));
@@ -115,6 +136,18 @@ public final class ConfigBuilder {
         }
         stream.put("sockopt", new JSONObject().put("domainStrategy", "UseIPv4"));
         return stream;
+    }
+
+    private static int rangeUpper(Object value) {
+        if (value == null) return 0;
+        String text = String.valueOf(value).trim();
+        int dash = text.lastIndexOf('-');
+        if (dash >= 0) text = text.substring(dash + 1).trim();
+        try {
+            return Integer.parseInt(text);
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
     }
 
     private static String securityOf(Server server) {

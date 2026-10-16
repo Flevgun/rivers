@@ -18,6 +18,7 @@ export type Server = {
   path?: string;
   serviceName?: string;
   mode?: string;
+  extra?: string;
   alpn?: string;
   spiderX?: string;
 };
@@ -262,6 +263,7 @@ export function parseVless(raw: string): Server | null {
       path: query.get("path") || "",
       serviceName: query.get("serviceName") || "",
       mode: query.get("mode") || "",
+      extra: query.get("extra") || "",
       alpn: query.get("alpn") || "",
       spiderX: query.get("spx") || query.get("spiderX") || "",
     };
@@ -616,16 +618,49 @@ function xrayStream(server: Server) {
   } else if (network === "grpc") {
     stream.grpcSettings = { serviceName: server.serviceName || "" };
   } else if (network === "xhttp") {
+    const extra = xhttpExtra(server);
+    const mode = xhttpMode(server, extra);
     stream.xhttpSettings = {
       path: server.path || "/",
       host: server.host || undefined,
-      mode: server.mode || undefined,
-      extra: { scMaxEachPostBytes: 65536, scMinPostsIntervalMs: 30 },
+      mode,
+      scMaxEachPostBytes: extra.scMaxEachPostBytes,
+      scMinPostsIntervalMs: extra.scMinPostsIntervalMs,
+      extra,
     };
   } else if (network === "http") {
     stream.httpSettings = { path: server.path || "/", host: server.host ? [server.host] : undefined };
   }
   return stream;
+}
+
+function xhttpExtra(server: Server) {
+  let extra: Record<string, unknown> = {};
+  if (server.extra) {
+    try {
+      const parsed = JSON.parse(server.extra) as Record<string, unknown>;
+      if (parsed && typeof parsed === "object") extra = { ...parsed };
+    } catch {
+      extra = {};
+    }
+  }
+  const cap = rangeUpper(extra.scMaxEachPostBytes);
+  if (cap <= 0 || cap > 32768) extra.scMaxEachPostBytes = "4096";
+  if (extra.scMinPostsIntervalMs == null) extra.scMinPostsIntervalMs = "10";
+  return extra;
+}
+
+function xhttpMode(server: Server, extra: Record<string, unknown>) {
+  const mode = String(server.mode || extra.mode || "").toLowerCase();
+  if (!mode || mode === "auto" || mode === "packet-up") return "stream-up";
+  return mode;
+}
+
+function rangeUpper(value: unknown) {
+  const text = String(value ?? "").trim();
+  const part = text.includes("-") ? text.slice(text.lastIndexOf("-") + 1) : text;
+  const number = Number(part);
+  return Number.isFinite(number) ? number : 0;
 }
 
 function xrayDomain(item: string) {
