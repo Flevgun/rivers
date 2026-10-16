@@ -101,6 +101,7 @@ public class RiversVpnService extends VpnService {
         try {
             if (gen != generation.get()) return;
             Server server = Store.selected(this);
+            Store.useAllApps(this);
             if (server == null) throw new IOException("Сначала добавь сервер");
             Network physical = physicalNetwork();
             pinNetwork(physical);
@@ -150,7 +151,7 @@ public class RiversVpnService extends VpnService {
             if (!started) throw new IOException("Туннель не поднялся");
             running = true;
             status = "Включен";
-            LogBuffer.add("Rivers включён. Рунет напрямую, остальное через VPN");
+            LogBuffer.add("Rivers включён");
             try {
                 updateNotice("Включен");
             } catch (Throwable ignored) {

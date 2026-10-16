@@ -204,6 +204,15 @@ public final class Store {
         prefs(context).edit().putString("customConfig", config == null ? "" : config).apply();
     }
 
+    public static void useAllApps(Context context) {
+        if (prefs(context).getBoolean("allAppsOnce", false)) return;
+        prefs(context).edit()
+                .putString("appMode", "direct")
+                .putString("appPackages", "[]")
+                .putBoolean("allAppsOnce", true)
+                .apply();
+    }
+
     public static String theme(Context context) {
         return prefs(context).getString("theme", "mint");
     }

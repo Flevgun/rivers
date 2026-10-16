@@ -230,6 +230,7 @@ public class MainActivity extends android.app.Activity {
         serverName.setOnClickListener(view -> showTab(1));
         modeDirect.setOnClickListener(view -> setMode("direct"));
         modeVpn.setOnClickListener(view -> setMode("vpn"));
+        Store.useAllApps(this);
         paintMode();
         buildThemes();
         reloadServers();
@@ -351,7 +352,7 @@ public class MainActivity extends android.app.Activity {
         paintSegment(modeVpn, vpn);
         appsHint.setText(vpn
                 ? "Только отмеченные входят в туннель. Остальные идут напрямую и правила конфига их не видят."
-                : "Отмеченные идут напрямую. Остальные идут по конфигу. Если конфиг свой, действуют его правила.");
+                : "Все приложения идут по общему конфигу выбранного сервера. Отмеченные можно пустить мимо туннеля.");
     }
 
     private void fillConfig() {
