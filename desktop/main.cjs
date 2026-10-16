@@ -271,6 +271,7 @@ function emitLog(chunk) {
     const trimmed = line.replace(/\u001b\[[0-9;]*m/g, "").trim();
     if (!trimmed) continue;
     if (/process DNS packet|bad rdata|buffer size too small|overflow unpacking/i.test(trimmed)) continue;
+    if (/outbound\/block\[block\]|:\s*688[0-9]\b|forcibly closed by the remote host/i.test(trimmed)) continue;
     if (trimmed === lastLog && now - lastLogAt < 2000) continue;
     lastLog = trimmed;
     lastLogAt = now;

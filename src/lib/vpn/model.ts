@@ -428,6 +428,16 @@ function domainPieces(domains: string[], known: Set<string>) {
   return rules;
 }
 
+function resolverCidr(address: string) {
+  const host = address
+    .trim()
+    .replace(/^[a-z0-9]+:\/\//i, "")
+    .split("/")[0]
+    .replace(/:\d+$/, "")
+    .replace(/^\[|\]$/g, "");
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) ? `${host}/32` : "";
+}
+
 function singboxDnsServer(tag: string, address: string, detour: string) {
   const raw = address.trim();
   const prefixed = raw.match(/^(udp|tcp|tls|https|quic|h3|dhcp):\/\/(.+)$/i);
@@ -498,6 +508,8 @@ export function buildSingbox(input: {
     : { type: "direct", tag: "proxy" };
 
   const routeRules = [];
+  const localDns = resolverCidr(dns.local);
+  if (localDns) routeRules.push({ ip_cidr: [localDns], action: "route", outbound: "direct" });
   if (mode === "tun") {
     routeRules.push({ network: "udp", port: [53], action: "hijack-dns" });
     routeRules.push({ network: "tcp", port: [53], action: "reject" });
@@ -573,7 +585,9 @@ export function buildSingbox(input: {
             stack: "mixed",
             endpoint_independent_nat: true,
             udp_timeout: "10m",
-            ...(serverCidr ? { route_exclude_address: [serverCidr] } : {}),
+            ...( [serverCidr, localDns].filter(Boolean).length
+              ? { route_exclude_address: [serverCidr, localDns].filter(Boolean) }
+              : {}),
           },
     ],
     outbounds: [proxy, { type: "direct", tag: "direct" }, { type: "block", tag: "block" }],
