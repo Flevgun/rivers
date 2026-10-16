@@ -737,6 +737,7 @@ export function buildXray(input: {
     : { tag: "proxy", protocol: "freedom", settings: { domainStrategy: "UseIPv4" } };
 
   const routing: Record<string, unknown>[] = [
+    { type: "field", network: "udp", port: "443", outboundTag: "block" },
     {
       type: "field",
       ip: ["10.0.0.0/8", "192.168.0.0/16", "127.0.0.0/8"],

@@ -4,6 +4,7 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
@@ -15,6 +16,7 @@ import android.net.NetworkCapabilities;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
+import android.service.quicksettings.TileService;
 import android.system.OsConstants;
 
 import java.io.BufferedReader;
@@ -145,6 +147,7 @@ public class RiversVpnService extends VpnService {
             } catch (Throwable ignored) {
             }
             startSpeed();
+            refreshTile();
             return;
         } catch (Exception error) {
             if (gen != generation.get()) return;
@@ -315,6 +318,7 @@ public class RiversVpnService extends VpnService {
         running = false;
         starting = false;
         status = next;
+        refreshTile();
         releaseTunnel();
         unpinNetwork();
         try {
@@ -328,6 +332,13 @@ public class RiversVpnService extends VpnService {
             }
         } else {
             stopSelf(startId);
+        }
+    }
+
+    private void refreshTile() {
+        try {
+            TileService.requestListeningState(this, new ComponentName(this, RiversTileService.class));
+        } catch (Throwable ignored) {
         }
     }
 

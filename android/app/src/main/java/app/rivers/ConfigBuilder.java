@@ -55,6 +55,8 @@ public final class ConfigBuilder {
         root.put("routing", new JSONObject()
                 .put("domainStrategy", "AsIs")
                 .put("rules", new JSONArray()
+                        .put(new JSONObject().put("type", "field").put("outboundTag", "block")
+                                .put("network", "udp").put("port", "443"))
                         .put(new JSONObject().put("type", "field").put("outboundTag", "direct")
                                 .put("ip", new JSONArray().put("10.0.0.0/8").put("172.16.0.0/12").put("192.168.0.0/16").put("127.0.0.0/8")))
                         .put(new JSONObject().put("type", "field").put("outboundTag", "block")
