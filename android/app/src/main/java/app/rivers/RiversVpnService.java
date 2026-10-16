@@ -93,6 +93,9 @@ public class RiversVpnService extends VpnService {
 
     private void connect(int gen) {
         int origin = commandId;
+        Exception last = null;
+        try {
+        for (int attempt = 1; attempt <= 3; attempt++) {
         try {
             if (gen != generation.get()) return;
             Server server = Store.selected(this);
@@ -142,10 +145,25 @@ public class RiversVpnService extends VpnService {
             } catch (Throwable ignored) {
             }
             startSpeed();
+            return;
         } catch (Exception error) {
             if (gen != generation.get()) return;
-            LogBuffer.add(error.getMessage() == null ? "не запустилось" : error.getMessage());
-            shutdown(error.getMessage() == null ? "Ошибка" : error.getMessage(), false, origin);
+            last = error;
+            releaseTunnel();
+            String message = error.getMessage() == null ? "не запустилось" : error.getMessage();
+            LogBuffer.add("попытка " + attempt + ": " + message);
+            if (attempt == 3) break;
+            try {
+                Thread.sleep(700);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        }
+        if (gen != generation.get()) return;
+        String message = last == null || last.getMessage() == null ? "не запустилось" : last.getMessage();
+        shutdown(message, false, origin);
         } finally {
             if (gen == generation.get()) starting = false;
         }
@@ -338,7 +356,7 @@ public class RiversVpnService extends VpnService {
 
     private void startSpeed() {
         speedStop = false;
-        long[] base = tunBytes();
+        long[] base = tunnelStats();
         new Thread(() -> {
             long rx = base[0];
             long tx = base[1];
@@ -348,7 +366,7 @@ public class RiversVpnService extends VpnService {
                 } catch (InterruptedException interrupted) {
                     return;
                 }
-                long[] now = tunBytes();
+                long[] now = tunnelStats();
                 long down = Math.max(0, now[0] - rx);
                 long up = Math.max(0, now[1] - tx);
                 rx = now[0];
@@ -361,6 +379,15 @@ public class RiversVpnService extends VpnService {
                 }
             }
         }, "rivers-speed").start();
+    }
+
+    private static long[] tunnelStats() {
+        try {
+            long[] stats = TProxyService.TProxyGetStats();
+            if (stats != null && stats.length >= 4) return new long[] { stats[3], stats[1] };
+        } catch (Throwable ignored) {
+        }
+        return tunBytes();
     }
 
     private static long[] tunBytes() {
@@ -395,8 +422,12 @@ public class RiversVpnService extends VpnService {
     }
 
     private void updateNotice(String text) {
-        NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager != null) manager.notify(1, notification(text));
+        Notification notification = notification(text);
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else {
+            startForeground(1, notification);
+        }
     }
 
     private void promote(String text) {
@@ -419,10 +450,13 @@ public class RiversVpnService extends VpnService {
         Notification.Builder builder = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(this, "vpn")
                 : new Notification.Builder(this);
+        boolean speed = text != null && text.startsWith("↓");
         return builder
                 .setSmallIcon(R.drawable.ic_stat)
-                .setContentTitle("Rivers")
-                .setContentText(text)
+                .setContentTitle(speed ? text : "Rivers")
+                .setContentText(speed ? "Rivers" : text)
+                .setStyle(new Notification.BigTextStyle().bigText(speed ? text : text))
+                .setOnlyAlertOnce(true)
                 .setContentIntent(content)
                 .setOngoing(true);
     }

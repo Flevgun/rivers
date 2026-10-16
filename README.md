@@ -6,9 +6,9 @@
 
 ## Скачать
 
-Один релиз, два файла: [Rivers 1.5.17](https://github.com/Flevgun/rivers/releases/tag/v1.5.17).
+Один релиз, два файла: [Rivers 1.5.18](https://github.com/Flevgun/rivers/releases/tag/v1.5.18).
 
-**[Windows 64-bit](https://github.com/Flevgun/rivers/releases/download/v1.5.17/Rivers-windows-64.zip)**
+**[Windows 64-bit](https://github.com/Flevgun/rivers/releases/download/v1.5.18/Rivers-windows-64.zip)**
 
 1. Распакуй архив в любую папку.
 2. Запусти `Rivers.exe`.
@@ -21,7 +21,7 @@
 
 Windows может написать, что издатель неизвестный. Это из-за того, что сборка без подписи. Нажми «Подробнее», затем «Выполнить в любом случае».
 
-**[Android](https://github.com/Flevgun/rivers/releases/download/v1.5.17/Rivers-android.apk)**
+**[Android](https://github.com/Flevgun/rivers/releases/download/v1.5.18/Rivers-android.apk)**
 
 Нужен Android 10 или новее. Скачай apk из того же релиза, разреши установку из этого источника и открой файл. Внизу три иконки: главная, серверы, настройки. Если вышла новая версия, на главной появится плашка: нажатие скачает apk и откроет установку. Та же проверка есть в настройках. Подписки сворачиваются. Приложения, логи и тема лежат в настройках.
 

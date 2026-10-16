@@ -79,6 +79,9 @@ type RiversBridge = {
   latestRelease?: () => Promise<{ newer?: boolean; latest?: string; url?: string }>;
   openRelease?: (url: string) => Promise<boolean>;
   consumeResume?: () => Promise<boolean>;
+  test?: () => Promise<{ ok?: boolean; ms?: number; error?: string }>;
+  elevate?: () => Promise<{ ok?: boolean; error?: string }>;
+  onState?: (callback: (running: boolean) => void) => () => void;
   onLog?: (callback: (line: string) => void) => () => void;
   onSpeed?: (callback: (payload: { down: number; up: number } | null) => void) => () => void;
 };
@@ -121,9 +124,22 @@ export function ClientApp() {
       void bridge?.setTray?.(useVpn.getState().settings.tray);
       off =
         bridge?.onLog?.((line) => {
-          const level = /FATAL|ERROR|panic|ядро остановилось/i.test(line) ? "error" : "info";
+          const level = /FATAL|ERROR|panic|ядро остановилось|не запустилось|не удалась/i.test(line) ? "error" : "info";
           useVpn.getState().pushLog(level, line);
         }) ?? (() => {});
+      const offState =
+        bridge?.onState?.((running) => {
+          if (running) return;
+          const current = useVpn.getState();
+          if (!current.connected) return;
+          current.setConnected(false);
+          current.pushLog("error", "туннель остановился");
+        }) ?? (() => {});
+      const previous = off;
+      off = () => {
+        previous();
+        offState();
+      };
       if (await bridge?.consumeResume?.()) {
         const current = useVpn.getState();
         const server = current.servers.find((item) => item.id === current.activeId) ?? null;
@@ -303,6 +319,27 @@ export function ClientApp() {
                 setTesting(true);
                 setFailed(false);
                 setDelay(null);
+                const bridge = (window as unknown as { rivers?: RiversBridge }).rivers;
+                const finish = () => setTesting(false);
+                if (state.connected && bridge?.test) {
+                  void bridge
+                    .test()
+                    .then((result) => {
+                      if (result?.ok) {
+                        setDelay(result.ms && result.ms > 0 ? result.ms : 1);
+                        state.pushLog("info", result.ms ? `туннель отвечает, ${result.ms} мс` : "туннель отвечает");
+                      } else {
+                        setFailed(true);
+                        state.pushLog("error", result?.error || "туннель не ответил");
+                      }
+                    })
+                    .catch(() => {
+                      setFailed(true);
+                      state.pushLog("error", "туннель не ответил");
+                    })
+                    .finally(finish);
+                  return;
+                }
                 void probeServer({ data: { host: server.address, port: server.port } })
                   .then((result) => {
                     if (result.ok) {
@@ -317,7 +354,7 @@ export function ClientApp() {
                     setFailed(true);
                     state.pushLog("error", `${server.name}: нет ответа`);
                   })
-                  .finally(() => setTesting(false));
+                  .finally(finish);
               }}
             />
           )}
@@ -443,6 +480,47 @@ function NavButton({
   );
 }
 
+function HomeLogs() {
+  const { logs } = useVpn();
+  const [errorsOnly, setErrorsOnly] = useState(false);
+  const [query, setQuery] = useState("");
+  const shown = logs.filter((entry) => {
+    if (errorsOnly && entry.level !== "error") return false;
+    if (query && !entry.text.toLowerCase().includes(query.toLowerCase())) return false;
+    return true;
+  });
+  return (
+    <div className="mt-4 hidden w-full max-w-lg md:block">
+      <div className="mb-2 flex items-center gap-2">
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Фильтр логов"
+          className="min-h-11 flex-1 rounded-full bg-raised px-4 text-sm outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => setErrorsOnly((value) => !value)}
+          className={cn("min-h-11 rounded-full px-3 text-sm", errorsOnly ? "bg-accent text-accent-ink" : "bg-raised text-muted")}
+        >
+          Ошибки
+        </button>
+      </div>
+      <ul className="max-h-40 overflow-y-auto rounded-card border border-line bg-surface">
+        {shown.length === 0 ? (
+          <li className="px-4 py-3 text-sm text-muted">Пока пусто.</li>
+        ) : (
+          shown.slice(0, 12).map((entry) => (
+            <li key={entry.id} className="border-t border-line px-4 py-2 font-mono text-xs leading-5 first:border-t-0">
+              <span className={entry.level === "error" ? "text-danger" : "text-fg"}>{entry.text}</span>
+            </li>
+          ))
+        )}
+      </ul>
+    </div>
+  );
+}
+
 function Home({
   server,
   connected,
@@ -520,6 +598,7 @@ function Home({
         {note ? (
           <p className={cn("mt-2 max-w-md text-center text-sm", connected ? "text-muted" : "text-danger")}>{note}</p>
         ) : null}
+        <HomeLogs />
         <div className="mt-3 grid w-full max-w-xs grid-cols-2 gap-2">
           {(
             [
@@ -1109,7 +1188,7 @@ function Core({
           </button>
         ))}
       </div>
-      <div className="mb-2 flex items-center justify-between gap-2">
+      <div className="sticky top-0 z-10 mb-2 flex items-center justify-between gap-2 bg-bg py-2">
         <span className="text-xs text-muted">{custom ? "свой конфиг" : "собран из настроек"}</span>
         <div className="flex gap-2">
           <button type="button" onClick={onReset} className="min-h-11 rounded-full px-3 text-sm text-muted">

@@ -59,6 +59,7 @@ type State = {
     email: string;
     telegram: string;
     routeFix: number;
+    admin: boolean;
   };
   stats: { sent: number; recv: number; days: { day: string; sent: number; recv: number }[] };
   logs: { id: string; at: number; level: "info" | "error"; text: string }[];
@@ -114,7 +115,7 @@ export const useVpn = create<State>()(
       core: "xray",
       mode: "tun",
       overrides: { xray: null, "sing-box": null },
-      settings: { autostart: false, tray: true, lang: "ru", theme: "mint", email: "", telegram: "", routeFix: 1 },
+      settings: { autostart: false, tray: true, lang: "ru", theme: "mint", email: "", telegram: "", routeFix: 1, admin: true },
       stats: { sent: 0, recv: 0, days: emptyWeek() },
       logs: [],
       setCore: (core) => set({ core }),
@@ -233,11 +234,13 @@ export const useVpn = create<State>()(
         return {
           ...current,
           ...saved,
+          connected: false,
+          startedAt: null,
           core: saved.core ?? current.core,
           mode: saved.mode ?? current.mode,
-          settings: { ...current.settings, ...saved.settings, routeFix: 1, theme: saved.settings?.theme ?? "mint" },
+          settings: { ...current.settings, ...saved.settings, routeFix: 1, theme: saved.settings?.theme ?? "mint", admin: saved.settings?.admin !== false },
           stats: saved.stats ?? current.stats,
-          logs: saved.logs ?? current.logs,
+          logs: [],
           overrides: { ...current.overrides, ...saved.overrides },
           tun: {
             ...current.tun,
@@ -249,6 +252,21 @@ export const useVpn = create<State>()(
           geos: repairGeos(saved.geos, current.geos),
         };
       },
+      partialize: (state) => ({
+        servers: state.servers,
+        subscriptions: state.subscriptions,
+        activeId: state.activeId,
+        preset: state.preset,
+        rules: state.rules,
+        geos: state.geos,
+        tun: state.tun,
+        dns: state.dns,
+        core: state.core,
+        mode: state.mode,
+        overrides: state.overrides,
+        settings: state.settings,
+        stats: state.stats,
+      }),
     },
   ),
 );

@@ -3,7 +3,7 @@ import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
 import { cn } from "@/lib/cn";
 import { useVpn } from "@/lib/vpn/store";
 
-const APP_VERSION = "1.5.17";
+const APP_VERSION = "1.5.18";
 const CORE_VERSION = { xray: "Xray", "sing-box": "sing-box 1.12.12" } as const;
 
 function bytes(value: number) {
@@ -59,6 +59,20 @@ export function SettingsPanel() {
             void (window as unknown as { rivers?: { setTray?: (on: boolean) => void } }).rivers?.setTray?.(tray);
           }}
         />
+        <button
+          type="button"
+          onClick={() => {
+            void (window as unknown as { rivers?: { elevate?: () => Promise<{ ok?: boolean; error?: string }> } }).rivers
+              ?.elevate?.()
+              .then((result) => {
+                if (result && result.ok === false) setUpdateNote(result.error || (en ? "Cancelled" : "Отменено"));
+              });
+          }}
+          className="flex min-h-12 w-full items-center justify-between gap-3 text-left"
+        >
+          <span className="text-sm">{en ? "Run as administrator" : "Запуск от администратора"}</span>
+          <span className="text-sm text-accent">{en ? "Restart" : "Перезапустить"}</span>
+        </button>
         <div className="flex min-h-12 items-center justify-between gap-3">
           <span className="text-sm">{en ? "Theme" : "Тема"}</span>
           <div className="flex flex-wrap justify-end gap-2">
@@ -200,9 +214,16 @@ export function LogsPanel() {
   const { logs, clearLogs, settings } = useVpn();
   const en = settings?.lang === "en";
   const [notice, setNotice] = useState("");
+  const [query, setQuery] = useState("");
+  const [errorsOnly, setErrorsOnly] = useState(false);
+  const shown = logs.filter((entry) => {
+    if (errorsOnly && entry.level !== "error") return false;
+    if (query && !entry.text.toLowerCase().includes(query.toLowerCase())) return false;
+    return true;
+  });
 
   async function copyLogs() {
-    const text = formatLogs(logs);
+    const text = formatLogs(shown);
     const bridge = (window as unknown as { rivers?: { copyText?: (value: string) => Promise<{ mode?: string }> } }).rivers;
     let mode = "text";
     if (bridge?.copyText) {
@@ -217,14 +238,27 @@ export function LogsPanel() {
 
   return (
     <div>
-      <header className="mb-4 flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-10 mb-4 flex flex-wrap items-center justify-between gap-3 bg-bg py-2">
         <h1 className="text-2xl font-semibold tracking-tight">{en ? "Logs" : "Логи"}</h1>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-1 items-center justify-end gap-1">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={en ? "Filter" : "Фильтр"}
+            className="min-h-11 w-40 rounded-full bg-raised px-4 text-sm outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => setErrorsOnly((value) => !value)}
+            className={cn("min-h-11 rounded-full px-3 text-sm", errorsOnly ? "bg-accent text-accent-ink" : "text-muted")}
+          >
+            {en ? "Errors" : "Ошибки"}
+          </button>
           {notice && <span className="text-xs text-muted">{notice}</span>}
           <button
             type="button"
             onClick={copyLogs}
-            disabled={logs.length === 0}
+            disabled={shown.length === 0}
             className="min-h-11 rounded-full px-3 text-sm text-accent disabled:text-muted"
           >
             {en ? "Copy" : "Копировать"}
@@ -234,13 +268,13 @@ export function LogsPanel() {
           </button>
         </div>
       </header>
-      {logs.length === 0 ? (
+      {shown.length === 0 ? (
         <p className="rounded-card border border-dashed border-line px-4 py-8 text-sm text-muted">
           {en ? "No entries yet." : "Пока пусто."}
         </p>
       ) : (
         <ul className="overflow-hidden rounded-card border border-line bg-surface">
-          {logs.map((entry, index) => (
+          {shown.map((entry, index) => (
             <li key={entry.id} className={cn("px-4 py-3 font-mono text-xs leading-5", index > 0 && "border-t border-line")}>
               <span className="text-muted">{new Date(entry.at).toLocaleString(en ? "en-GB" : "ru-RU")}</span>{" "}
               <span className={entry.level === "error" ? "text-danger" : "text-fg"}>{entry.text}</span>

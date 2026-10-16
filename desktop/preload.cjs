@@ -8,6 +8,13 @@ contextBridge.exposeInMainWorld("rivers", {
   latestRelease: () => ipcRenderer.invoke("app:latest"),
   openRelease: (url) => ipcRenderer.invoke("app:open", String(url ?? "")),
   consumeResume: () => ipcRenderer.invoke("app:resume"),
+  test: () => ipcRenderer.invoke("core:test"),
+  elevate: () => ipcRenderer.invoke("app:elevate"),
+  onState: (callback) => {
+    const listener = (_event, running) => callback(Boolean(running));
+    ipcRenderer.on("core:state", listener);
+    return () => ipcRenderer.removeListener("core:state", listener);
+  },
   onLog: (callback) => {
     const listener = (_event, line) => callback(line);
     ipcRenderer.on("core:log", listener);

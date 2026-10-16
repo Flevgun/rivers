@@ -485,7 +485,7 @@ export function buildSingbox(input: {
   }
 
   return {
-    log: { level: "info" },
+    log: { level: "warn" },
     dns: {
       servers: [
         singboxDnsServer("local", dns.local, "direct"),

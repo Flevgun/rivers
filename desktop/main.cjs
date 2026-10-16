@@ -115,9 +115,33 @@ function setSystemProxy(enable, serverValue) {
 
 function stopCore() {
   stopSpeed();
-  if (coreProc && !coreProc.killed) coreProc.kill();
+  const proc = coreProc;
   coreProc = null;
-  return setSystemProxy(false);
+  const gone = new Promise((resolve) => {
+    if (!proc || proc.exitCode !== null) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(() => {
+      try {
+        proc.kill();
+      } catch {
+        /* already gone */
+      }
+      resolve();
+    }, 2500);
+    proc.once("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    try {
+      proc.kill();
+    } catch {
+      clearTimeout(timer);
+      resolve();
+    }
+  });
+  return gone.then(() => setSystemProxy(false));
 }
 
 let speedStop = () => {};
@@ -231,12 +255,26 @@ function iconFile() {
   return png;
 }
 
+function sendState(running) {
+  if (!windowRef || windowRef.isDestroyed()) return;
+  windowRef.webContents.send("core:state", Boolean(running));
+}
+
+let lastLog = "";
+let lastLogAt = 0;
+
 function emitLog(chunk) {
   const text = chunk.toString();
   if (!windowRef || windowRef.isDestroyed()) return;
+  const now = Date.now();
   for (const line of text.split(/\r?\n/)) {
     const trimmed = line.replace(/\u001b\[[0-9;]*m/g, "").trim();
-    if (trimmed) windowRef.webContents.send("core:log", trimmed);
+    if (!trimmed) continue;
+    if (/process DNS packet|bad rdata|buffer size too small|overflow unpacking/i.test(trimmed)) continue;
+    if (trimmed === lastLog && now - lastLogAt < 2000) continue;
+    lastLog = trimmed;
+    lastLogAt = now;
+    windowRef.webContents.send("core:log", trimmed);
   }
 }
 
@@ -262,6 +300,63 @@ function waitAlive(child) {
 }
 
 ipcMain.handle("core:stop", () => stopCore());
+
+ipcMain.handle("core:test", async () => {
+  const clash = await new Promise((resolve) => {
+    const request = http.get(
+      "http://127.0.0.1:9097/proxies/proxy/delay?timeout=5000&url=" + encodeURIComponent("https://www.gstatic.com/generate_204"),
+      (response) => {
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () => {
+          try {
+            const data = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+            if (response.statusCode === 200 && Number(data.delay) >= 0) resolve({ ok: true, ms: Number(data.delay) });
+            else resolve(null);
+          } catch {
+            resolve(null);
+          }
+        });
+      },
+    );
+    request.on("error", () => resolve(null));
+    request.setTimeout(6000, () => {
+      request.destroy();
+      resolve(null);
+    });
+  });
+  if (clash) return clash;
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: "127.0.0.1", port: 10809 });
+    const timer = setTimeout(() => {
+      socket.destroy();
+      resolve({ ok: false, error: "туннель не ответил" });
+    }, 4000);
+    socket.on("connect", () => {
+      clearTimeout(timer);
+      socket.end();
+      resolve({ ok: true, ms: 0 });
+    });
+    socket.on("error", () => {
+      clearTimeout(timer);
+      resolve({ ok: false, error: "туннель не ответил" });
+    });
+  });
+});
+
+ipcMain.handle("app:elevate", async () => {
+  if (process.platform !== "win32") return { ok: true };
+  if (await isAdmin()) return { ok: true, already: true };
+  app.releaseSingleInstanceLock();
+  const elevated = await relaunchElevated();
+  if (!elevated) {
+    app.requestSingleInstanceLock();
+    return { ok: false, error: "Запрос прав отменён" };
+  }
+  quitting = true;
+  app.quit();
+  return { ok: true };
+});
 
 function currentVersion() {
   try {
@@ -461,13 +556,18 @@ ipcMain.handle("core:start", async (_event, payload) => {
   mkdirSync(dir, { recursive: true });
   const configPath = path.join(dir, "config.json");
   writeFileSync(configPath, String(payload?.config ?? ""), "utf8");
-  emitLog(`запуск ${path.basename(exe)}`);
-  const args = ["run", "-c", configPath];
-  coreProc = spawn(exe, args, { cwd: binDir(), windowsHide: true });
-  const alive = await waitAlive(coreProc);
-  if (!alive.ok) {
+  let lastError = "ядро не запустилось";
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
     await stopCore();
-    return { ok: false, error: plainError(alive.error) };
+    emitLog(`запуск ${path.basename(exe)}, попытка ${attempt}`);
+    coreProc = spawn(exe, ["run", "-c", configPath], { cwd: binDir(), windowsHide: true });
+    const alive = await waitAlive(coreProc);
+    if (alive.ok && coreProc && coreProc.exitCode === null) break;
+    lastError = plainError(alive.error);
+    emitLog(lastError);
+    await stopCore();
+    if (attempt === 3) return { ok: false, error: lastError };
+    await new Promise((resolve) => setTimeout(resolve, 700));
   }
   watchSpeed(core, exe);
   const running = coreProc;
@@ -476,8 +576,10 @@ ipcMain.handle("core:start", async (_event, payload) => {
     coreProc = null;
     stopSpeed();
     emitLog(`ядро остановилось, код ${code}`);
+    sendState(false);
     void setSystemProxy(false);
   });
+  sendState(true);
   if (core === "sing-box" && mode === "tun") {
     return {
       ok: true,
@@ -561,6 +663,16 @@ async function shutdown() {
 
 app.whenReady().then(async () => {
   if (process.platform === "win32") app.setAppUserModelId("app.rivers.desktop");
+  if (process.platform === "win32" && !(await isAdmin())) {
+    app.releaseSingleInstanceLock();
+    const elevated = await relaunchElevated();
+    if (elevated) {
+      quitting = true;
+      app.quit();
+      return;
+    }
+    app.requestSingleInstanceLock();
+  }
   port = await freePort(47831);
   startServer();
   try {

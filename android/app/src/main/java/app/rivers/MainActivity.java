@@ -85,6 +85,10 @@ public class MainActivity extends android.app.Activity {
     private Button addLink;
     private Button addSub;
     private Button copyLogs;
+    private EditText logSearch;
+    private TextView logErrors;
+    private boolean errorsOnly;
+    private String logQuery = "";
     private EditText appSearch;
     private ImageView tabHome;
     private ImageView tabServers;
@@ -119,7 +123,7 @@ public class MainActivity extends android.app.Activity {
             if (on && RiversVpnService.speedText != null && !RiversVpnService.speedText.isEmpty()) homeHint.setText(RiversVpnService.speedText);
             else if (!on) homeHint.setText("Рунет напрямую, остальное через VPN");
             paintChrome();
-            if (pageLogs.getVisibility() == View.VISIBLE) logs.setText(LogBuffer.text());
+            if (pageLogs.getVisibility() == View.VISIBLE) logs.setText(filteredLogs());
             handler.postDelayed(this, 700);
         }
     };
@@ -151,6 +155,8 @@ public class MainActivity extends android.app.Activity {
         addLink = findViewById(R.id.addLink);
         addSub = findViewById(R.id.addSub);
         copyLogs = findViewById(R.id.copyLogs);
+        logSearch = findViewById(R.id.logSearch);
+        logErrors = findViewById(R.id.logErrors);
         appSearch = findViewById(R.id.appSearch);
         appsHint = findViewById(R.id.appsHint);
         pageHome = findViewById(R.id.pageHome);
@@ -220,8 +226,26 @@ public class MainActivity extends android.app.Activity {
         findViewById(R.id.addSub).setOnClickListener(view -> askText("Ссылка подписки", this::loadSubscription));
         findViewById(R.id.copyLogs).setOnClickListener(view -> {
             ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-            clipboard.setPrimaryClip(ClipData.newPlainText("Rivers", LogBuffer.text()));
+            clipboard.setPrimaryClip(ClipData.newPlainText("Rivers", filteredLogs()));
             toast("Логи в буфере");
+        });
+        ((EditText) logSearch).addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                logQuery = s.toString();
+                if (pageLogs.getVisibility() == View.VISIBLE) logs.setText(filteredLogs());
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+        logErrors.setOnClickListener(view -> {
+            errorsOnly = !errorsOnly;
+            logErrors.setAlpha(errorsOnly ? 1f : 0.55f);
+            if (pageLogs.getVisibility() == View.VISIBLE) logs.setText(filteredLogs());
         });
         showTab(0);
         checkUpdate(false);
@@ -243,6 +267,21 @@ public class MainActivity extends android.app.Activity {
         super.onPause();
     }
 
+    private String filteredLogs() {
+        String raw = LogBuffer.text();
+        if ("Пока пусто.".equals(raw)) return raw;
+        String needle = logQuery == null ? "" : logQuery.trim().toLowerCase(Locale.US);
+        StringBuilder out = new StringBuilder();
+        for (String line : raw.split("\n")) {
+            String lower = line.toLowerCase(Locale.US);
+            if (errorsOnly && !lower.contains("error") && !lower.contains("fatal") && !lower.contains("fail") && !lower.contains("ошиб")) continue;
+            if (!needle.isEmpty() && !lower.contains(needle)) continue;
+            if (out.length() > 0) out.append('\n');
+            out.append(line);
+        }
+        return out.length() == 0 ? "Ничего не найдено." : out.toString();
+    }
+
     private void showTab(int next) {
         tab = next;
         pageHome.setVisibility(next == 0 ? View.VISIBLE : View.GONE);
@@ -253,7 +292,7 @@ public class MainActivity extends android.app.Activity {
         paintTab(tabHome, next == 0);
         paintTab(tabServers, next == 1);
         paintTab(tabSettings, next >= 2);
-        if (next == 4) logs.setText(LogBuffer.text());
+        if (next == 4) logs.setText(filteredLogs());
     }
 
     private void setMode(String mode) {
