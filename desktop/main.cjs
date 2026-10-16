@@ -113,6 +113,15 @@ function setSystemProxy(enable, serverValue) {
   });
 }
 
+function killStaleCores() {
+  if (process.platform !== "win32") return Promise.resolve();
+  return new Promise((resolve) => {
+    const child = spawn("taskkill", ["/IM", "sing-box.exe", "/T", "/F"], { windowsHide: true });
+    child.on("exit", () => resolve());
+    child.on("error", () => resolve());
+  });
+}
+
 function stopCore() {
   stopSpeed();
   const proc = coreProc;
@@ -141,7 +150,11 @@ function stopCore() {
       resolve();
     }
   });
-  return gone.then(() => setSystemProxy(false));
+  return gone.then(async () => {
+    await killStaleCores();
+    if (process.platform === "win32") await new Promise((resolve) => setTimeout(resolve, 1200));
+    return setSystemProxy(false);
+  });
 }
 
 let speedStop = () => {};
@@ -568,7 +581,7 @@ ipcMain.handle("core:start", async (_event, payload) => {
     emitLog(lastError);
     await stopCore();
     if (attempt === 3) return { ok: false, error: lastError };
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    await new Promise((resolve) => setTimeout(resolve, /already exists/i.test(lastError) ? 2000 : 700));
   }
   watchSpeed(core, exe);
   const running = coreProc;

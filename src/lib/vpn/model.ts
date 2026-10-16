@@ -491,6 +491,9 @@ export function buildSingbox(input: {
         server_port: server.port,
         uuid: server.uuid,
         flow: linkSecurity(server) === "none" ? undefined : server.flow || undefined,
+        connect_timeout: "8s",
+        tcp_keep_alive: "30s",
+        tcp_keep_alive_interval: "15s",
         tls: linkSecurity(server) === "none"
           ? undefined
           : {
@@ -552,6 +555,14 @@ export function buildSingbox(input: {
     }
   }
 
+  const directNames = enabled.flatMap((item) =>
+    item.outbound === "direct"
+      ? splitList(item.domains)
+          .filter((domain) => !/^(geosite:|geoip:|keyword:|full:|regexp:|rule-set:)/.test(domain))
+          .map(suffixName)
+      : [],
+  );
+
   return {
     log: { level: "warn" },
     dns: {
@@ -560,6 +571,7 @@ export function buildSingbox(input: {
         singboxDnsServer("remote", dns.remote, "proxy"),
       ],
       rules: [
+        ...(directNames.length ? [{ domain_suffix: [...new Set(directNames)], server: "local" }] : []),
         ...(known.has("geosite-ru") ? [{ rule_set: ["geosite-ru"], server: "local" }] : []),
         { domain_suffix: splitList(dns.suffixes).map(suffixName), server: "local" },
       ],
