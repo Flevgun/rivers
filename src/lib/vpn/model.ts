@@ -590,6 +590,7 @@ export function buildSingbox(input: {
         : {
             type: "tun",
             tag: "tun-in",
+            interface_name: "Rivers",
             address: [tun.address],
             mtu: tun.mtu,
             auto_route: true,

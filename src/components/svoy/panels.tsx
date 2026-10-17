@@ -3,7 +3,7 @@ import { Bar, BarChart, ResponsiveContainer, XAxis } from "recharts";
 import { cn } from "@/lib/cn";
 import { useVpn } from "@/lib/vpn/store";
 
-const APP_VERSION = "1.5.27";
+const APP_VERSION = "1.5.28";
 const CORE_VERSION = { xray: "Xray", "sing-box": "sing-box 1.12.12" } as const;
 
 function bytes(value: number) {

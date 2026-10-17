@@ -113,6 +113,38 @@ function setSystemProxy(enable, serverValue) {
   });
 }
 
+function removeTunAdapter() {
+  if (process.platform !== "win32") return Promise.resolve();
+  const script = [
+    "$names = @('Rivers','sing-tun','singbox_tun','sing-box')",
+    "Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |",
+    "Where-Object { $names -contains $_.Name } |",
+    "ForEach-Object {",
+    "  Disable-NetAdapter -Name $_.Name -Confirm:$false -ErrorAction SilentlyContinue",
+    "  Remove-NetAdapter -Name $_.Name -Confirm:$false -ErrorAction SilentlyContinue",
+    "}",
+  ].join(" ");
+  return new Promise((resolve) => {
+    const child = spawn("powershell.exe", ["-NoProfile", "-Command", script], { windowsHide: true });
+    const timer = setTimeout(() => {
+      try {
+        child.kill();
+      } catch {
+        /* already gone */
+      }
+      resolve();
+    }, 8000);
+    child.on("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
 function killStaleCores() {
   if (process.platform !== "win32") return Promise.resolve();
   return new Promise((resolve) => {
@@ -152,7 +184,8 @@ function stopCore() {
   });
   return gone.then(async () => {
     await killStaleCores();
-    if (process.platform === "win32") await new Promise((resolve) => setTimeout(resolve, 1200));
+    await removeTunAdapter();
+    if (process.platform === "win32") await new Promise((resolve) => setTimeout(resolve, 800));
     return setSystemProxy(false);
   });
 }
@@ -285,6 +318,7 @@ function emitLog(chunk) {
     if (!trimmed) continue;
     if (/process DNS packet|bad rdata|buffer size too small|overflow unpacking/i.test(trimmed)) continue;
     if (/outbound\/block\[block\]|:\s*688[0-9]\b|forcibly closed by the remote host/i.test(trimmed)) continue;
+    if (/aborted by the software in your host machine|wsasend:|wsarecv:|172\.19\.0\.2/i.test(trimmed)) continue;
     if (trimmed === lastLog && now - lastLogAt < 2000) continue;
     lastLog = trimmed;
     lastLogAt = now;
