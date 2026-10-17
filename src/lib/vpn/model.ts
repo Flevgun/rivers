@@ -492,8 +492,6 @@ export function buildSingbox(input: {
         uuid: server.uuid,
         flow: linkSecurity(server) === "none" ? undefined : server.flow || undefined,
         connect_timeout: "8s",
-        tcp_keep_alive: "30s",
-        tcp_keep_alive_interval: "15s",
         tls: linkSecurity(server) === "none"
           ? undefined
           : {
