@@ -565,7 +565,7 @@ export function buildSingbox(input: {
     log: { level: "warn" },
     dns: {
       servers: [
-        singboxDnsServer("local", dns.local, "direct"),
+        { type: "local", tag: "local" },
         singboxDnsServer("remote", dns.remote, "proxy"),
       ],
       rules: [
@@ -592,7 +592,7 @@ export function buildSingbox(input: {
             address: [tun.address],
             mtu: tun.mtu,
             auto_route: true,
-            strict_route: true,
+            strict_route: false,
             stack: "mixed",
             endpoint_independent_nat: true,
             udp_timeout: "10m",
