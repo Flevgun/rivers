@@ -38,6 +38,33 @@ import { useVpn } from "@/lib/vpn/store";
 
 type Tab = "home" | "servers" | "routes" | "core" | "geo" | "tun" | "settings" | "logs";
 
+function configText(
+  core: CoreName,
+  server: VpnServer | null,
+  rules: RouteRule[],
+  tun: ReturnType<typeof useVpn.getState>["tun"],
+  dns: ReturnType<typeof useVpn.getState>["dns"],
+  geos: ReturnType<typeof useVpn.getState>["geos"],
+  mode: ConnectMode,
+  override: string | null,
+) {
+  const generated =
+    core === "xray"
+      ? buildXray({ server, rules, dns, mode })
+      : buildSingbox({ server, rules, tun, dns, geos, mode });
+  const fresh = JSON.stringify(generated, null, 2);
+  if (!override || !server) return fresh;
+  try {
+    const parsed = JSON.parse(override) as { outbounds?: { tag?: string; server?: string; settings?: { vnext?: { address?: string }[] } }[] };
+    const outbound = parsed.outbounds?.find((item) => item.tag === "proxy");
+    const host = outbound?.server || outbound?.settings?.vnext?.[0]?.address;
+    if (host && host !== server.address) return fresh;
+  } catch {
+    return fresh;
+  }
+  return override;
+}
+
 const NAV: { id: Tab; icon: typeof Power }[] = [
   { id: "home", icon: Power },
   { id: "servers", icon: Server },
@@ -145,20 +172,16 @@ export function ClientApp() {
         const server = current.servers.find((item) => item.id === current.activeId) ?? null;
         if (server && bridge?.start) {
           current.setMode("tun");
-          const profile =
-            current.overrides?.["sing-box"] ??
-            JSON.stringify(
-              buildSingbox({
-                server,
-                rules: current.rules,
-                tun: current.tun,
-                dns: current.dns,
-                geos: current.geos,
-                mode: "tun",
-              }),
-              null,
-              2,
-            );
+          const profile = configText(
+            "sing-box",
+            server,
+            current.rules,
+            current.tun,
+            current.dns,
+            current.geos,
+            "tun",
+            current.overrides?.["sing-box"] ?? null,
+          );
           current.pushLog("info", "запуск sing-box, режим tun");
           const result = await bridge.start({ core: "sing-box", mode: "tun", config: profile });
           if (!result.ok) current.pushLog("error", result.error || "ядро не запустилось");
@@ -207,19 +230,10 @@ export function ClientApp() {
   const clock = useClock(state.connected, state.startedAt);
   const generated = useMemo(
     () =>
-      state.core === "xray"
-        ? buildXray({ server, rules: state.rules, dns: state.dns, mode: state.mode })
-        : buildSingbox({
-            server,
-            rules: state.rules,
-            tun: state.tun,
-            dns: state.dns,
-            geos: state.geos,
-            mode: state.mode,
-          }),
-    [server, state.core, state.mode, state.rules, state.tun, state.dns, state.geos],
+      configText(state.core, server, state.rules, state.tun, state.dns, state.geos, state.mode, state.overrides?.[state.core] ?? null),
+    [server, state.core, state.mode, state.rules, state.tun, state.dns, state.geos, state.overrides],
   );
-  const profile = state.overrides?.[state.core] ?? JSON.stringify(generated, null, 2);
+  const profile = generated;
 
   async function copyProfile() {
     await navigator.clipboard.writeText(profile);
@@ -288,7 +302,7 @@ export function ClientApp() {
                     return;
                   }
                   if (bridge) {
-                    state.pushLog("info", `запуск ${state.core}, режим ${state.mode}`);
+                    state.pushLog("info", `запуск ${state.core}, режим ${state.mode}, ${server.name} · ${server.address}:${server.port}`);
                     const result = await bridge.start({ core: state.core, mode: state.mode, config: profile });
                     if (!result.ok) {
                       const message = result.error || "ядро не запустилось";
@@ -677,6 +691,35 @@ function Servers() {
   const [text, setText] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+
+  function pickServer(server: VpnServer) {
+    selectServer(server.id);
+    const current = useVpn.getState();
+    if (!current.connected || current.activeId !== server.id) return;
+    const bridge = (window as unknown as { rivers?: RiversBridge }).rivers;
+    if (!bridge?.start) return;
+    const profile = configText(
+      current.core,
+      server,
+      current.rules,
+      current.tun,
+      current.dns,
+      current.geos,
+      current.mode,
+      current.overrides?.[current.core] ?? null,
+    );
+    current.pushLog("info", `переключение на ${server.name} · ${server.address}:${server.port}`);
+    void (async () => {
+      await bridge.stop?.();
+      const result = await bridge.start({ core: current.core, mode: current.mode, config: profile });
+      if (!result?.ok) {
+        current.setConnected(false);
+        current.pushLog("error", result?.error || "ядро не запустилось");
+        return;
+      }
+      current.setConnected(true);
+    })();
+  }
   const [busy, setBusy] = useState<string | null>(null);
 
   function close() {
@@ -790,7 +833,7 @@ function Servers() {
                     <li key={server.id} className="border-t border-line">
                       <button
                         type="button"
-                        onClick={() => selectServer(server.id)}
+                        onClick={() => pickServer(server)}
                         className={cn(
                           "flex min-h-14 w-full items-center gap-3 px-4 text-left",
                           server.id === activeId && "bg-bg",
@@ -830,7 +873,7 @@ function Servers() {
                   <li key={server.id} className="flex items-center border-t border-line">
                     <button
                       type="button"
-                      onClick={() => selectServer(server.id)}
+                      onClick={() => pickServer(server)}
                       className={cn(
                         "flex min-h-14 flex-1 items-center gap-3 px-4 text-left",
                         server.id === activeId && "bg-bg",

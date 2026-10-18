@@ -1,6 +1,8 @@
 const { app, BrowserWindow, shell, ipcMain, session, Tray, Menu, nativeImage, clipboard } = require("electron");
 const { spawn } = require("node:child_process");
 const { existsSync, mkdirSync, unlinkSync, writeFileSync } = require("node:fs");
+const dns = require("node:dns");
+const dnsPromises = dns.promises;
 const http = require("node:http");
 const https = require("node:https");
 const net = require("node:net");
@@ -16,6 +18,72 @@ let tray;
 let trayEnabled = true;
 let quitting = false;
 let port = 47831;
+
+async function resolve4(host) {
+  try {
+    const hit = await dnsPromises.lookup(host, { family: 4 });
+    if (hit?.address) return hit.address;
+  } catch {
+    /* system DNS did not answer */
+  }
+  for (const server of ["1.1.1.1", "8.8.8.8"]) {
+    const resolver = new dnsPromises.Resolver();
+    resolver.setServers([server]);
+    try {
+      const list = await resolver.resolve4(host);
+      if (list?.[0]) return list[0];
+    } catch {
+      /* try the next resolver */
+    }
+  }
+  return "";
+}
+
+async function pinServerAddress(raw) {
+  let cfg;
+  try {
+    cfg = JSON.parse(String(raw ?? ""));
+  } catch {
+    return String(raw ?? "");
+  }
+  let host = "";
+  let sing = null;
+  let hop = null;
+  for (const outbound of cfg.outbounds || []) {
+    if (outbound?.tag === "proxy" && outbound.server) {
+      host = String(outbound.server);
+      sing = outbound;
+      break;
+    }
+    const next = outbound?.settings?.vnext?.[0];
+    if (outbound?.tag === "proxy" && next?.address) {
+      host = String(next.address);
+      hop = next;
+      break;
+    }
+  }
+  if (!host || net.isIP(host)) return JSON.stringify(cfg);
+  const address = await resolve4(host);
+  if (!address) {
+    emitLog(`не удалось узнать адрес ${host}, остаётся имя`);
+    return JSON.stringify(cfg);
+  }
+  emitLog(`сервер ${host} → ${address}`);
+  if (sing) sing.server = address;
+  if (hop) hop.address = address;
+  const cidr = `${address}/32`;
+  if (cfg.route) {
+    cfg.route.rules = [{ ip_cidr: [cidr], action: "route", outbound: "direct" }, ...(cfg.route.rules || [])];
+  }
+  if (cfg.routing?.rules) {
+    cfg.routing.rules = [{ type: "field", ip: [address], outboundTag: "direct" }, ...cfg.routing.rules];
+  }
+  for (const inbound of cfg.inbounds || []) {
+    if (inbound?.type !== "tun") continue;
+    inbound.route_exclude_address = [...new Set([...(inbound.route_exclude_address || []), cidr])];
+  }
+  return JSON.stringify(cfg);
+}
 
 function resourceRoot() {
   return app.isPackaged ? process.resourcesPath : path.join(__dirname, "..", ".output");
@@ -603,7 +671,8 @@ ipcMain.handle("core:start", async (_event, payload) => {
   const dir = app.getPath("userData");
   mkdirSync(dir, { recursive: true });
   const configPath = path.join(dir, "config.json");
-  writeFileSync(configPath, String(payload?.config ?? ""), "utf8");
+  const configText = await pinServerAddress(payload?.config);
+  writeFileSync(configPath, configText, "utf8");
   let lastError = "ядро не запустилось";
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     await stopCore();
