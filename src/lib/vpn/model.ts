@@ -507,6 +507,10 @@ export function buildSingbox(input: {
         transport: singboxTransport(server),
       }
     : { type: "direct", tag: "proxy" };
+  const proxyUdp =
+    proxy.type === "vless" && proxy.flow
+      ? { ...proxy, tag: "proxy-udp", flow: undefined, packet_encoding: "xudp" }
+      : null;
 
   const routeRules = [];
   const localDns = resolverCidr(dns.local);
@@ -552,6 +556,19 @@ export function buildSingbox(input: {
       routeRules.push(base);
     }
   }
+
+  const routed = [];
+  for (const rule of routeRules) {
+    if (proxyUdp && rule.outbound === "proxy" && rule.action === "route") {
+      if (rule.network === "udp") {
+        routed.push({ ...rule, outbound: "proxy-udp" });
+        continue;
+      }
+      if (!rule.network) routed.push({ ...rule, network: "udp", outbound: "proxy-udp" });
+    }
+    routed.push(rule);
+  }
+  if (proxyUdp) routed.push({ network: "udp", action: "route", outbound: "proxy-udp" });
 
   const directNames = enabled.flatMap((item) =>
     item.outbound === "direct"
@@ -601,14 +618,14 @@ export function buildSingbox(input: {
               : {}),
           },
     ],
-    outbounds: [proxy, { type: "direct", tag: "direct" }, { type: "block", tag: "block" }],
+    outbounds: proxyUdp ? [proxy, proxyUdp, { type: "direct", tag: "direct" }, { type: "block", tag: "block" }] : [proxy, { type: "direct", tag: "direct" }, { type: "block", tag: "block" }],
     route: {
       rule_set: geos.flatMap((source) => {
         const file = bundledRuleFile(source.url);
         if (!file) return [];
         return [{ tag: source.tag, type: "local", format: "binary", path: `rules/${file}` }];
       }),
-      rules: routeRules,
+      rules: routed,
       final: "proxy",
       auto_detect_interface: true,
       default_domain_resolver: "local",
