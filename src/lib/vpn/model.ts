@@ -568,7 +568,6 @@ export function buildSingbox(input: {
     }
     routed.push(rule);
   }
-  if (proxyUdp) routed.push({ network: "udp", action: "route", outbound: "proxy-udp" });
 
   const directNames = enabled.flatMap((item) =>
     item.outbound === "direct"
