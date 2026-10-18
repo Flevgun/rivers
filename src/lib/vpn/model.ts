@@ -491,6 +491,7 @@ export function buildSingbox(input: {
         server_port: server.port,
         uuid: server.uuid,
         flow: linkSecurity(server) === "none" ? undefined : server.flow || undefined,
+        packet_encoding: "xudp",
         connect_timeout: "8s",
         tls: linkSecurity(server) === "none"
           ? undefined
@@ -507,10 +508,6 @@ export function buildSingbox(input: {
         transport: singboxTransport(server),
       }
     : { type: "direct", tag: "proxy" };
-  const proxyUdp =
-    proxy.type === "vless" && proxy.flow
-      ? { ...proxy, tag: "proxy-udp", flow: undefined, packet_encoding: "xudp" }
-      : null;
 
   const routeRules = [];
   const localDns = resolverCidr(dns.local);
@@ -555,18 +552,6 @@ export function buildSingbox(input: {
     if (!domains.length && !ips.length && !processes.length && (ports || item.network)) {
       routeRules.push(base);
     }
-  }
-
-  const routed = [];
-  for (const rule of routeRules) {
-    if (proxyUdp && rule.outbound === "proxy" && rule.action === "route") {
-      if (rule.network === "udp") {
-        routed.push({ ...rule, outbound: "proxy-udp" });
-        continue;
-      }
-      if (!rule.network) routed.push({ ...rule, network: "udp", outbound: "proxy-udp" });
-    }
-    routed.push(rule);
   }
 
   const directNames = enabled.flatMap((item) =>
@@ -617,14 +602,14 @@ export function buildSingbox(input: {
               : {}),
           },
     ],
-    outbounds: proxyUdp ? [proxy, proxyUdp, { type: "direct", tag: "direct" }, { type: "block", tag: "block" }] : [proxy, { type: "direct", tag: "direct" }, { type: "block", tag: "block" }],
+    outbounds: [proxy, { type: "direct", tag: "direct" }, { type: "block", tag: "block" }],
     route: {
       rule_set: geos.flatMap((source) => {
         const file = bundledRuleFile(source.url);
         if (!file) return [];
         return [{ tag: source.tag, type: "local", format: "binary", path: `rules/${file}` }];
       }),
-      rules: routed,
+      rules: routeRules,
       final: "proxy",
       auto_detect_interface: true,
       default_domain_resolver: "local",
