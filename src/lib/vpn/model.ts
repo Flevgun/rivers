@@ -508,6 +508,10 @@ export function buildSingbox(input: {
         transport: singboxTransport(server),
       }
     : { type: "direct", tag: "proxy" };
+  const proxyUdp =
+    proxy.type === "vless"
+      ? { ...proxy, tag: "proxy-udp", flow: undefined, packet_encoding: "xudp" }
+      : null;
 
   const routeRules = [];
   const localDns = resolverCidr(dns.local);
@@ -516,7 +520,7 @@ export function buildSingbox(input: {
     routeRules.push({ network: "udp", port: [53], action: "hijack-dns" });
     routeRules.push({ network: "tcp", port: [53], action: "reject" });
   }
-  if (tun.sniff) routeRules.push({ action: "sniff" });
+  if (tun.sniff) routeRules.push({ network: "tcp", action: "sniff" });
   const serverCidr = server ? hostCidr(server.address) : "";
   if (serverCidr) routeRules.push({ ip_cidr: [serverCidr], action: "route", outbound: "direct" });
   else if (server?.address) routeRules.push({ domain: [server.address], action: "route", outbound: "direct" });
@@ -535,7 +539,12 @@ export function buildSingbox(input: {
     const ports = singboxPorts(item.ports);
     if (ports) Object.assign(base, ports);
     if (processes.length) {
-      routeRules.push({ ...base, process_name: processes });
+      if (proxyUdp && item.outbound === "proxy" && !item.network) {
+        routeRules.push({ ...base, network: "udp", outbound: "proxy-udp", process_name: processes });
+        routeRules.push({ ...base, network: "tcp", process_name: processes });
+      } else {
+        routeRules.push({ ...base, process_name: processes });
+      }
     }
     if (ips.length) {
       const plainIps = ips.filter((ip) => !ip.startsWith("geoip:"));
@@ -559,6 +568,7 @@ export function buildSingbox(input: {
       ? splitList(item.domains)
           .filter((domain) => !/^(geosite:|geoip:|keyword:|full:|regexp:|rule-set:)/.test(domain))
           .map(suffixName)
+          .filter((domain) => /\.(ru|su|рф|xn--p1ai)$/i.test(domain))
       : [],
   );
 
@@ -602,7 +612,7 @@ export function buildSingbox(input: {
               : {}),
           },
     ],
-    outbounds: [proxy, { type: "direct", tag: "direct" }, { type: "block", tag: "block" }],
+    outbounds: proxyUdp ? [proxy, proxyUdp, { type: "direct", tag: "direct" }, { type: "block", tag: "block" }] : [proxy, { type: "direct", tag: "direct" }, { type: "block", tag: "block" }],
     route: {
       rule_set: geos.flatMap((source) => {
         const file = bundledRuleFile(source.url);

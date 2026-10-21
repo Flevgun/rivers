@@ -59,6 +59,7 @@ function configText(
     const outbound = parsed.outbounds?.find((item) => item.tag === "proxy");
     const host = outbound?.server || outbound?.settings?.vnext?.[0]?.address;
     if (host && host !== server.address) return fresh;
+    if (core === "sing-box" && !override.includes('"proxy-udp"')) return fresh;
   } catch {
     return fresh;
   }
